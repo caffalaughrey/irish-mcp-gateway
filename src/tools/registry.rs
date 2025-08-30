@@ -12,3 +12,15 @@ pub fn build_registry() -> Registry {
     map.insert(hello.name(), hello);
     Registry(Arc::new(map))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_knows_registry_contains_hello() {
+        let reg = build_registry();
+        assert!(reg.0.contains_key("hello.echo"));
+    }
+}
+

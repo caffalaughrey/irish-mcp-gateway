@@ -21,5 +21,8 @@ docker:
 docker-run:
 	docker run --rm -p 8080:8080 -e MODE=server -e PORT=8080 $(REGISTRY)/$(APP)
 
+test:
+	cargo test --all
+
 # push:
 # 	docker push $(REGISTRY)/$(APP):dev

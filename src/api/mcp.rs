@@ -83,3 +83,94 @@ pub async fn stdio_loop(reg: Registry) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{Router, routing::post};
+    use hyper::Request;
+    use axum::body::{Body, to_bytes};
+    use tower::ServiceExt; // for `oneshot`
+
+    const BODY_LIMIT: usize = 1024 * 1024;
+
+    fn router_with_state() -> Router {
+        let reg = crate::tools::registry::build_registry();
+        Router::new().route("/mcp", post(super::http)).with_state(reg)
+    }
+
+    #[test]
+    fn it_knows_tools_list_shape() {
+        let reg = crate::tools::registry::build_registry();
+        let v = super::tools_list(&reg);
+        assert!(v["tools"].is_array());
+        assert_eq!(v["tools"][0]["name"], "hello.echo");
+    }
+
+    #[tokio::test]
+    async fn it_knows_call_tool_happy_path() {
+        let reg = crate::tools::registry::build_registry();
+        let out = super::call_tool(&reg, &serde_json::json!({
+            "name":"hello.echo",
+            "arguments":{"name":"Arn"}
+        })).await.unwrap();
+        assert_eq!(out["message"], "Dia dhuit, Arn!");
+    }
+
+    #[tokio::test]
+    async fn it_knows_http_tools_list() {
+        let app = router_with_state();
+        let req = Request::builder()
+            .method("POST").uri("/mcp")
+            .header("content-type","application/json")
+            .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"tools.list"}"#)).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert!(resp.status().is_success());
+        let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
+        let v: J = serde_json::from_slice(&bytes).unwrap();
+        assert!(v["result"]["tools"].is_array());
+    }
+
+    #[tokio::test]
+    async fn it_knows_http_tools_call_ok() {
+        let app = router_with_state();
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"hello.echo","arguments":{"name":"Arn"}}}"#;
+        let req = Request::builder()
+            .method("POST").uri("/mcp")
+            .header("content-type","application/json")
+            .body(Body::from(body)).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert!(resp.status().is_success());
+        let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
+        let v: J = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["result"]["message"], "Dia dhuit, Arn!");
+    }
+
+    #[tokio::test]
+    async fn it_knows_http_unknown_tool() {
+        let app = router_with_state();
+        let body = r#"{"jsonrpc":"2.0","id":3,"method":"tools.call","params":{"name":"does.not.exist","arguments":{}}}"#;
+        let req = Request::builder()
+            .method("POST").uri("/mcp")
+            .header("content-type","application/json")
+            .body(Body::from(body)).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
+        let v: J = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"]["code"], -32000);
+    }
+
+    #[tokio::test]
+    async fn it_knows_http_unknown_method() {
+        let app = router_with_state();
+        let body = r#"{"jsonrpc":"2.0","id":4,"method":"nope"}"#;
+        let req = Request::builder()
+            .method("POST").uri("/mcp")
+            .header("content-type","application/json")
+            .body(Body::from(body)).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
+        let v: J = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"]["code"], -32601);
+    }
+}

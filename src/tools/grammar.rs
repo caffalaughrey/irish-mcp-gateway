@@ -47,13 +47,19 @@ mod tests {
 
         server.mock(|when, then| {
             when.method(POST)
-                .path("/api/gramadoir/1.0/check")
-                .json_body(json!({"text":"Tá sé go maith"}));
-            then.status(200).json_body(json!({
-                "issues": [{
-                    "code":"SPELL","message":"Spelling","start":0,"end":2,"suggestions":["Tá"]
-                }]
-            }));
+                .path("/api/gramadoir/1.0")
+                .json_body(json!({"teacs":"Tá sé go maith"}));
+            then.status(200).json_body(json!([{
+                "context":"Tá sé go maith",
+                "contextoffset":"0",
+                "errorlength":"2",
+                "fromx":"0",
+                "fromy":"0",
+                "msg":"Spelling",
+                "ruleId":"SPELL",
+                "tox":"2",
+                "toy":"0"
+            }]));
         });
 
         let tool = GrammarTool::new(server.base_url());

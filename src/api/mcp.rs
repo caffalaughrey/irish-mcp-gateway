@@ -186,31 +186,38 @@ mod tests {
         let server = MockServer::start();
         server.mock(|when, then| {
             when.method(POST)
-                .path("/api/gramadoir/1.0/check")
-                .json_body(json!({"text":"Tá an peann ar an mbord"}));
-            then.status(200).json_body(json!({
-                "issues": [{"code":"AGR","message":"Agreement","start":0,"end":2,"suggestions":[]}]
-            }));
+                .path("/api/gramadoir/1.0")
+                .json_body(json!({"teacs":"Tá an peann ar an mbord"}));
+            then.status(200).json_body(json!([{
+                "context":"Tá an peann ar an mbord",
+                "contextoffset":"0",
+                "errorlength":"2",
+                "fromx":"0",
+                "fromy":"0",
+                "msg":"Agreement",
+                "ruleId":"AGR",
+                "tox":"2",
+                "toy":"0"
+            }]));
         });
 
-        // Build a registry with ONLY the grammar tool to avoid env coupling
         let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
         let tool: Arc<dyn Tool> = Arc::new(GrammarTool::new(server.base_url()));
         map.insert(tool.name(), tool);
         let reg = crate::tools::registry::Registry(Arc::new(map));
 
-        let app = Router::new().route("/mcp", post(super::http)).with_state(reg);
+        let app = axum::Router::new().route("/mcp", axum::routing::post(super::http)).with_state(reg);
 
         let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
-        let req = Request::builder()
+        let req = hyper::Request::builder()
             .method("POST").uri("/mcp")
             .header("content-type","application/json")
-            .body(Body::from(body)).unwrap();
+            .body(axum::body::Body::from(body)).unwrap();
 
         let resp = app.oneshot(req).await.unwrap();
         assert!(resp.status().is_success());
-        let bytes = to_bytes(resp.into_body(), 1<<20).await.unwrap();
-        let v: J = serde_json::from_slice(&bytes).unwrap();
+        let bytes = axum::body::to_bytes(resp.into_body(), 1<<20).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(v["result"]["issues"][0]["code"], "AGR");
     }
 }

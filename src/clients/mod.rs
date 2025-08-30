@@ -1,1 +1,1 @@
-// Future: remote clients (e.g., Gramadóir HTTP)
+pub mod gramadoir;

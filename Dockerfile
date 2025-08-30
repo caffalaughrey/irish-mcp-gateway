@@ -36,9 +36,9 @@ RUN cargo build --release
 # ---- run
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-ENV PORT=8080
 ENV MODE=server
+ENV PORT=8080
 WORKDIR /srv
-COPY --from=builder /app/target/release/hello-mcp-server /usr/local/bin/hello-mcp
+COPY --from=builder /app/target/release/irish-mcp-gateway /usr/local/bin/irish-mcp-gateway
 EXPOSE 8080
-CMD ["/usr/local/bin/hello-mcp"]
+CMD ["/usr/local/bin/irish-mcp-gateway"]

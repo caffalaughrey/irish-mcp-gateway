@@ -28,6 +28,8 @@ use rmcp::transport::streamable_http_server::{
     tower::{StreamableHttpService, StreamableHttpServerConfig},
 };
 
+use crate::clients::gramadoir::GramadoirRemote;
+
 /// Trait abstraction to wrap existing Gramadóir integration without 
 /// touching its types. Return a `serde_json::Value` with the exact
 /// REST shape: `{"issues":[...]}`.
@@ -128,12 +130,6 @@ pub fn make_factory(checker: Arc<dyn GrammarCheck>) -> impl Fn() -> (GatewaySvc,
     }
 }
 
-/// Build the Streamable HTTP Tower Service for mounting at `/mcp`.
-// pub fn streamable_http_service(checker: Arc<dyn GrammarCheck>) -> StreamableHttpService<impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Clone + Send + 'static> {
-//     let session_mgr = Arc::new(LocalSessionManager::default());
-//     StreamableHttpService::new(make_factory(checker), session_mgr)
-// }
-
 /// Run stdio MCP server when `MODE=stdio`.
 /// This uses rmcp io transport to speak JSON-RPC over stdin/stdout.
 pub async fn serve_stdio(
@@ -150,9 +146,20 @@ pub async fn serve_stdio(
     Ok(())
 }
 
+pub async fn serve_stdio_from(
+    factory: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>),
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (handler, tools) = factory();
+    let service = Router::new(handler).with_tools(tools);
+    let stdin = tokio::io::stdin();
+    let stdout = tokio::io::stdout();
+    serve_server(service, (stdin, stdout)).await?;
+    Ok(())
+}
+
 pub fn make_streamable_http_service(
     factory: impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Send + Sync + Clone + 'static,
-) -> StreamableHttpService<Router<GatewaySvc>, LocalSessionManager> {
+) -> StreamableHttpService<GatewayRouter, LocalSessionManager> {
     let session_mgr = Arc::new(LocalSessionManager::default());
     let cfg = StreamableHttpServerConfig::default();
 
@@ -165,15 +172,22 @@ pub fn make_streamable_http_service(
     StreamableHttpService::new(service_factory, session_mgr, cfg)
 }
 
-// pub async fn run_stdio(make_handler: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>)) -> anyhow::Result<()> {
-//     // Build once for stdio, no sessions needed.
-//     let (handler, router) = make_handler();
-//     // rmcp 0.5: serve_server takes a "service" — the pair is accepted on 0.5
-//     // and stdio transport defaults via features; if you want to be explicit:
-//     let (stdin, stdout) = stdio();
-//     serve_server((handler, router), (stdin, stdout)).await?;
-//     Ok(())
-// }
+pub type GatewayRouter = Router<GatewaySvc>;
+
+pub fn factory_with_checker(
+    checker: Arc<dyn GrammarCheck + Send + Sync>,
+) -> (GatewaySvc, ToolRouter<GatewaySvc>) {
+    let handler = GatewaySvc { checker };
+    let tools = GatewaySvc::tool_router(); // <— provided by #[rmcp::tool_router]
+    (handler, tools)
+}
+
+pub fn factory_from_env() -> (GatewaySvc, ToolRouter<GatewaySvc>) {
+    let base = std::env::var("GRAMADOIR_BASE_URL")
+        .expect("GRAMADOIR_BASE_URL must be set");
+    let checker = Arc::new(GramadoirRemote::new(base)) as Arc<dyn GrammarCheck + Send + Sync>;
+    factory_with_checker(checker)
+}
 
 
 #[cfg(test)]
@@ -259,5 +273,12 @@ mod tests {
 
         let _svc = crate::infra::mcp::make_streamable_http_service(factory);
         // If we got here, type constraints & factory shape are satisfied.
+    }
+
+    #[cfg(test)]
+    pub fn test_factory_with_checker(
+        checker: Arc<dyn GrammarCheck + Send + Sync>,
+    ) -> (GatewaySvc, ToolRouter<GatewaySvc>) {
+        factory_with_checker(checker)
     }
 }

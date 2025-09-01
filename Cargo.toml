@@ -20,7 +20,7 @@ rmcp = { version = "0.5", features = [
   "tower",
   "transport-streamable-http-server",
   "transport-streamable-http-server-session",
-  "transport-worker",
+  "transport-worker"
 ] }
 
 [dev-dependencies]

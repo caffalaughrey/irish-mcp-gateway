@@ -105,7 +105,7 @@ impl GatewaySvc {
             .0
             .get("text")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| McpError::invalid_params("missing required field: text".into(), None))?
+            .ok_or_else(|| McpError::invalid_params("missing required field: text", None))?
             .to_owned();
 
         // Use your existing field (it's named `checker`)
@@ -143,9 +143,10 @@ pub fn make_factory(checker: Arc<dyn GrammarCheck>) -> impl Fn() -> (GatewaySvc,
 pub async fn serve_stdio(
     factory: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>),
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (handler, tools) = factory();
-    let service = Router::new(handler).with_tools(tools);
+    let (handler, router) = factory();
+    let service = Router::new(handler).with_tools(router); // <-- Service<RoleServer>
 
+    // use tokio stdio
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
@@ -168,20 +169,21 @@ pub fn make_streamable_http_service(
     StreamableHttpService::new(service_factory, session_mgr, cfg)
 }
 
-pub async fn run_stdio(make_handler: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>)) -> anyhow::Result<()> {
-    // Build once for stdio, no sessions needed.
-    let (handler, router) = make_handler();
-    // rmcp 0.5: serve_server takes a "service" — the pair is accepted on 0.5
-    // and stdio transport defaults via features; if you want to be explicit:
-    let (stdin, stdout) = stdio();
-    serve_server((handler, router), (stdin, stdout)).await?;
-    Ok(())
-}
+// pub async fn run_stdio(make_handler: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>)) -> anyhow::Result<()> {
+//     // Build once for stdio, no sessions needed.
+//     let (handler, router) = make_handler();
+//     // rmcp 0.5: serve_server takes a "service" — the pair is accepted on 0.5
+//     // and stdio transport defaults via features; if you want to be explicit:
+//     let (stdin, stdout) = stdio();
+//     serve_server((handler, router), (stdin, stdout)).await?;
+//     Ok(())
+// }
 
 
 #[cfg(test)]
 mod tests_util {
     use super::*;
+    use serde_json::json;
 
     /// Returns a checker that always produces a deterministic dummy issue.
     pub fn dummy_grammar_checker() -> Arc<dyn GrammarCheck> {

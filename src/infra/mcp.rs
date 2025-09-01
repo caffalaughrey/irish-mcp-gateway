@@ -99,8 +99,7 @@ impl GatewaySvc {
     async fn gael_grammar_check(
         &self,
         params: Parameters<JsonObject>,
-    ) -> Result<CallToolResult, McpError> {
-        // Parameters<T> is a tuple struct in 0.5
+    ) -> Result<rmcp::Json<serde_json::Value>, McpError> {
         let text = params
             .0
             .get("text")
@@ -108,17 +107,14 @@ impl GatewaySvc {
             .ok_or_else(|| McpError::invalid_params("missing required field: text", None))?
             .to_owned();
 
-        // Use your existing field (it's named `checker`)
-        let payload: JsonValue = self
+        let payload = self
             .checker
             .check_as_json(&text)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        // Return plain JSON content (no custom schema)
-        let content = Content::json(payload)
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
-        Ok(CallToolResult::success(vec![content]))
+        // ✅ Spec-compliant: goes to `structuredContent`
+        Ok(rmcp::Json(payload))
     }
 }
 
@@ -181,23 +177,21 @@ pub fn make_streamable_http_service(
 
 
 #[cfg(test)]
-mod tests_util {
+mod tests {
     use super::*;
-    use serde_json::json;
+    use serde_json::{json, Value as JsonValue};
 
-    /// Returns a checker that always produces a deterministic dummy issue.
-    pub fn dummy_grammar_checker() -> Arc<dyn GrammarCheck> {
+    /// A tiny helper to build a checker that returns a fixed JSON payload.
+    fn dummy_checker() -> Arc<dyn GrammarCheck> {
         IntoGrammarCheck::into(FnChecker::new(|text: String| async move {
-            let val = json!({
+            // reflect input to prove we got the value through the path
+            Ok(json!({
                 "issues": [{
                     "code": "TEST",
                     "message": format!("ok: {}", text),
-                    "start": 0,
-                    "end": 0,
-                    "suggestions": []
+                    "start": 0, "end": 0, "suggestions": []
                 }]
-            });
-            Ok(val)
+            }))
         }))
     }
 
@@ -206,5 +200,64 @@ mod tests_util {
     }
     impl IntoGrammarCheck for FnChecker {
         fn into(self) -> Arc<dyn GrammarCheck> { Arc::new(self) as Arc<dyn GrammarCheck> }
+    }
+
+    #[tokio::test]
+    async fn tool_call_success_returns_plain_json_issues() {
+        let svc = GatewaySvc::new(dummy_checker());
+        let mut obj = JsonObject::new();
+        obj.insert("text".to_string(), JsonValue::String("Tá an peann ar an mbord".into()));
+
+        // Method now returns rmcp::Json<serde_json::Value>
+        let rmcp::Json(val) = svc.gael_grammar_check(Parameters(obj)).await.expect("tool should succeed");
+
+        let issues = val["issues"].as_array().expect("issues array");
+        assert!(!issues.is_empty(), "expected at least one dummy issue");
+        assert_eq!(issues[0]["code"], "TEST");
+        assert!(issues[0]["message"].as_str().unwrap().starts_with("ok: Tá an peann"));
+    }
+
+    #[tokio::test]
+    async fn tool_call_missing_text_is_invalid_params() {
+        let svc = GatewaySvc::new(dummy_checker());
+        let obj = JsonObject::new(); // no "text"
+
+        let res = svc.gael_grammar_check(Parameters(obj)).await;
+
+        let err = match res {
+            Err(e) => e,
+            Ok(_) => panic!("expected invalid params error, got Ok"),
+        };
+
+        // JSON-RPC invalid params is -32602
+        assert_eq!(err.code.0, -32602, "expected invalid params code");
+        assert!(
+            err.message.contains("missing required field: text"),
+            "message should mention missing text, got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn tool_router_contains_gael_grammar_check() {
+        let router: ToolRouter<GatewaySvc> = GatewaySvc::tool_router();
+        // ToolRouter implements IntoIterator over routes; route.name() yields &str.
+        let names: Vec<String> = router.into_iter().map(|r| r.name().to_string()).collect();
+        assert!(names.iter().any(|n| n == "gael.grammar_check"), "missing tool 'gael.grammar_check', got: {:?}", names);
+    }
+
+    #[test]
+    fn streamable_http_service_builds() {
+        // Just a construction smoke test for the Streamable HTTP service.
+        // No network I/O, just ensures the factory produces a Service<RoleServer>.
+        let checker = dummy_checker();
+        let factory = move || {
+            let handler = GatewaySvc::new(checker.clone());
+            let tools: ToolRouter<GatewaySvc> = GatewaySvc::tool_router();
+            (handler, tools)
+        };
+
+        let _svc = crate::infra::mcp::make_streamable_http_service(factory);
+        // If we got here, type constraints & factory shape are satisfied.
     }
 }

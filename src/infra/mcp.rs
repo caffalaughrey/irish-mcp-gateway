@@ -12,16 +12,21 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use serde::Deserialize;
 use serde_json::{json, Value as JsonValue};
 
-use rmcp::content::Content;
-use rmcp::handler::server::{
-    tool::{CallToolResult, Parameters, ToolError},
+use rmcp::{
+    handler::server::router::Router,
+    handler::server::tool::{Parameters, ToolRouter},
+    model::{CallToolResult, Content},
+    ErrorData as McpError,
+    serve_server,
     ServerHandler,
+    transport::streamable_http_server::{
+        session::local::LocalSessionManager,
+        tower::{StreamableHttpServerConfig, StreamableHttpService},
+    },
+    // stdio transport helper (if you need direct (stdin, stdout))
+    transport::io::stdio,
 };
-use rmcp::router::ToolRouter;
-use rmcp::transport::streamable_http_server::{
-    service::StreamableHttpService,
-    session::local::LocalSessionManager,
-};
+
 
 /// Trait abstraction to wrap existing Gramadóir integration without 
 /// touching its types. Return a `serde_json::Value` with the exact
@@ -80,7 +85,7 @@ impl GatewaySvc {
 // We don't need extra methods from ServerHandler yet, but rmcp expects the impl.
 impl ServerHandler for GatewaySvc {}
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct CheckInput {
     text: String,
 }
@@ -91,23 +96,21 @@ struct CheckInput {
 #[rmcp::tool_router]
 impl GatewaySvc {
     #[rmcp::tool(name = "gael.grammar_check")]
-    async fn gael_grammar_check(&self, params: Parameters<P>) -> CallToolResult {
-        let CheckInput { text } = params.deserialize::<CheckInput>()
-            .map_err(|e| ToolError::InvalidParams { message: e.to_string() })?;
+    async fn gael_grammar_check(
+        &self,
+        params: Parameters<CheckInput>,
+    ) -> Result<CallToolResult, McpError> {
+        let CheckInput { text } = params.deserialize().map_err(|e| {
+            McpError::invalid_params(format!("invalid params: {e}"), None)
+        })?;
 
-        // Delegate to the existing tool through the adapter; return *plain JSON*
-        // like {"issues":[...]} so we never expose internal wire types.
-        let payload = self.checker
-            .check_as_json(&text)
-            .await
-            .map_err(|e| ToolError::InternalError { message: e.to_string() })?;
+        // Existing client must return a serde_json::Value shaped as {"issues":[...]}
+        let payload: serde_json::Value = self.gramadoir.check_json(&text).await.map_err(|e| {
+            McpError::internal_error(format!("gramadoir error: {e}"), None)
+        })?;
 
-        // MCP result as structured content containing JSON
-        let content = Content::from(rmcp::Json(payload));
-        Ok(rmcp::handler::server::tool::CallToolResponse {
-            structured_content: Some(vec![content]),
-            ..Default::default()
-        })
+        // rmcp 0.5 CallToolResult wants a JSON Value for structured_content
+        Ok(CallToolResult::structured(payload))
     }
 }
 
@@ -122,18 +125,43 @@ pub fn make_factory(checker: Arc<dyn GrammarCheck>) -> impl Fn() -> (GatewaySvc,
 }
 
 /// Build the Streamable HTTP Tower Service for mounting at `/mcp`.
-pub fn streamable_http_service(checker: Arc<dyn GrammarCheck>) -> StreamableHttpService<impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Clone + Send + 'static> {
-    let session_mgr = Arc::new(LocalSessionManager::default());
-    StreamableHttpService::new(make_factory(checker), session_mgr)
-}
+// pub fn streamable_http_service(checker: Arc<dyn GrammarCheck>) -> StreamableHttpService<impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Clone + Send + 'static> {
+//     let session_mgr = Arc::new(LocalSessionManager::default());
+//     StreamableHttpService::new(make_factory(checker), session_mgr)
+// }
 
 /// Run stdio MCP server when `MODE=stdio`.
 /// This uses rmcp io transport to speak JSON-RPC over stdin/stdout.
-pub async fn serve_stdio(checker: Arc<dyn GrammarCheck>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Uses SDK defaults for protocol/version & framing.
-    rmcp::transport::io::serve_server(make_factory(checker)).await?;
+// pub async fn serve_stdio(checker: Arc<dyn GrammarCheck>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//     // Uses SDK defaults for protocol/version & framing.
+//     rmcp::transport::io::serve_server(make_factory(checker)).await?;
+//     Ok(())
+// }
+
+pub fn build_streamable_http_service(
+    factory: impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Send + Sync + Clone + 'static,
+) -> StreamableHttpService<Router<GatewaySvc>, LocalSessionManager> {
+    let session_mgr = std::sync::Arc::new(LocalSessionManager::default());
+    let cfg = StreamableHttpServerConfig::default();
+
+    let handler_factory = move || {
+        let (handler, router) = factory();
+        Ok(Router::new(handler, router))
+    };
+
+    StreamableHttpService::new(handler_factory, session_mgr, cfg)
+}
+
+pub async fn run_stdio(make_handler: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>)) -> anyhow::Result<()> {
+    // Build once for stdio, no sessions needed.
+    let (handler, router) = make_handler();
+    // rmcp 0.5: serve_server takes a "service" — the pair is accepted on 0.5
+    // and stdio transport defaults via features; if you want to be explicit:
+    let (stdin, stdout) = stdio();
+    serve_server((handler, router), (stdin, stdout)).await?;
     Ok(())
 }
+
 
 #[cfg(test)]
 mod tests_util {

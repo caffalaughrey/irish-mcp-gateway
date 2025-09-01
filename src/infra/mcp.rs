@@ -1,7 +1,7 @@
 //! MCP server integration (Streamable HTTP + stdio) for irish-mcp-gateway.
 //!
-//! - Exposes a proper MCP tool router with `gael.grammar_check`
-//! - Mounts a Streamable HTTP service (POST frames, GET SSE) at `/mcp`
+//! - Exposes proper tool routers (eg. `gael.grammar_check`)
+//! - Mounts Streamable HTTP services (POST frames, GET SSE) at `/mcp`
 //! - Supports stdio mode when `MODE=stdio`
 //!
 //! This file intentionally **does not** depend on internal wire types. The tool
@@ -23,8 +23,8 @@ use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager,
 };
 
-/// Trait abstraction so we can wrap your existing Gramadóir integration
-/// without touching its types. Return a `serde_json::Value` with the exact
+/// Trait abstraction to wrap existing Gramadóir integration without 
+/// touching its types. Return a `serde_json::Value` with the exact
 /// REST shape: `{"issues":[...]}`.
 #[async_trait::async_trait]
 pub trait GrammarCheck: Send + Sync + 'static {
@@ -32,7 +32,7 @@ pub trait GrammarCheck: Send + Sync + 'static {
 }
 
 /// Thin wrapper around a boxed async fn, so `main` can adapt whatever
-/// client/type you already have with _zero_ churn elsewhere.
+/// client/type is in use with _zero_ churn elsewhere.
 pub struct FnChecker {
     inner: Arc<
         dyn Fn(
@@ -64,8 +64,8 @@ impl GrammarCheck for FnChecker {
     }
 }
 
-/// Your MCP server handler. Holds whichever implementation of `GrammarCheck`
-/// you give it from `main.rs` (usually the remote Gramadóir client you already have).
+/// The MCP server handler. Holds whichever implementation of `GrammarCheck`
+/// it is given from `main.rs`.
 #[derive(Clone)]
 pub struct GatewaySvc {
     checker: Arc<dyn GrammarCheck>,
@@ -85,17 +85,17 @@ struct CheckInput {
     text: String,
 }
 
-/// The tool router with a single tool `gael.grammar_check`.
+/// The tool router. For example in the case of `gael.grammar_check`:
 /// Input:  { "text": String }
-/// Output: { "issues": [...] }  (plain JSON, exactly like your REST fallback)
+/// Output: { "issues": [...] }  (plain JSON, just as in the REST API)
 #[rmcp::tool_router]
 impl GatewaySvc {
     #[rmcp::tool(name = "gael.grammar_check")]
-    async fn gael_grammar_check(&self, params: Parameters) -> CallToolResult {
+    async fn gael_grammar_check(&self, params: Parameters<P>) -> CallToolResult {
         let CheckInput { text } = params.deserialize::<CheckInput>()
             .map_err(|e| ToolError::InvalidParams { message: e.to_string() })?;
 
-        // Delegate to your existing tool through the adapter; return *plain JSON*
+        // Delegate to the existing tool through the adapter; return *plain JSON*
         // like {"issues":[...]} so we never expose internal wire types.
         let payload = self.checker
             .check_as_json(&text)
@@ -140,8 +140,8 @@ mod tests_util {
     use super::*;
 
     /// Returns a checker that always produces a deterministic dummy issue.
-    pub fn dummy_checker() -> Arc<dyn GrammarCheck> {
-        FnChecker::new(|text: String| async move {
+    pub fn dummy_grammar_checker() -> Arc<dyn GrammarCheck> {
+        IntoGrammarCheck::into(FnChecker::new(|text: String| async move {
             let val = json!({
                 "issues": [{
                     "code": "TEST",
@@ -152,7 +152,7 @@ mod tests_util {
                 }]
             });
             Ok(val)
-        }).into()
+        }))
     }
 
     trait IntoGrammarCheck {

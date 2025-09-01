@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::domain::GrammarIssue;
+use crate::infra::mcp::GrammarCheck;
 
 #[derive(Clone)]
 pub struct GramadoirRemote {
@@ -35,6 +36,19 @@ impl GramadoirRemote {
         // Upstream returns a top-level array
         let body: Vec<IssueWire> = resp.json().await.map_err(|e| e.to_string())?;
         Ok(body.into_iter().map(GrammarIssue::from).collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl GrammarCheck for GramadoirRemote {
+    async fn check_as_json(
+        &self,
+        text: &str,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        // If your client returns a typed struct instead, just
+        // serde_json::to_value(...) it here.
+        let v = self.check_as_json(text).await?;
+        Ok(v)
     }
 }
 

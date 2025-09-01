@@ -9,24 +9,24 @@
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use serde::Deserialize;
-use serde_json::{json, Value as JsonValue};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 use rmcp::{
-    handler::server::router::Router,
-    handler::server::tool::{Parameters, ToolRouter},
-    model::{CallToolResult, Content},
     ErrorData as McpError,
-    serve_server,
     ServerHandler,
-    transport::streamable_http_server::{
-        session::local::LocalSessionManager,
-        tower::{StreamableHttpServerConfig, StreamableHttpService},
+    model::{CallToolResult, Content, JsonObject},
+    handler::server::{
+        router::Router,
+        tool::{Parameters, ToolRouter},
     },
-    // stdio transport helper (if you need direct (stdin, stdout))
-    transport::io::stdio,
+    serve_server,
 };
 
+use rmcp::transport::streamable_http_server::{
+    session::local::LocalSessionManager,
+    tower::{StreamableHttpService, StreamableHttpServerConfig},
+};
 
 /// Trait abstraction to wrap existing Gramadóir integration without 
 /// touching its types. Return a `serde_json::Value` with the exact
@@ -95,22 +95,30 @@ struct CheckInput {
 /// Output: { "issues": [...] }  (plain JSON, just as in the REST API)
 #[rmcp::tool_router]
 impl GatewaySvc {
-    #[rmcp::tool(name = "gael.grammar_check")]
+    #[rmcp::tool(name = "gael.grammar_check", description = "Run Gramadóir and return {\"issues\": [...]} exactly as JSON")]
     async fn gael_grammar_check(
         &self,
-        params: Parameters<CheckInput>,
+        params: Parameters<JsonObject>,
     ) -> Result<CallToolResult, McpError> {
-        let CheckInput { text } = params.deserialize().map_err(|e| {
-            McpError::invalid_params(format!("invalid params: {e}"), None)
-        })?;
+        // Parameters<T> is a tuple struct in 0.5
+        let text = params
+            .0
+            .get("text")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| McpError::invalid_params("missing required field: text".into(), None))?
+            .to_owned();
 
-        // Existing client must return a serde_json::Value shaped as {"issues":[...]}
-        let payload: serde_json::Value = self.gramadoir.check_json(&text).await.map_err(|e| {
-            McpError::internal_error(format!("gramadoir error: {e}"), None)
-        })?;
+        // Use your existing field (it's named `checker`)
+        let payload: JsonValue = self
+            .checker
+            .check_as_json(&text)
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        // rmcp 0.5 CallToolResult wants a JSON Value for structured_content
-        Ok(CallToolResult::structured(payload))
+        // Return plain JSON content (no custom schema)
+        let content = Content::json(payload)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        Ok(CallToolResult::success(vec![content]))
     }
 }
 
@@ -132,24 +140,32 @@ pub fn make_factory(checker: Arc<dyn GrammarCheck>) -> impl Fn() -> (GatewaySvc,
 
 /// Run stdio MCP server when `MODE=stdio`.
 /// This uses rmcp io transport to speak JSON-RPC over stdin/stdout.
-// pub async fn serve_stdio(checker: Arc<dyn GrammarCheck>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//     // Uses SDK defaults for protocol/version & framing.
-//     rmcp::transport::io::serve_server(make_factory(checker)).await?;
-//     Ok(())
-// }
+pub async fn serve_stdio(
+    factory: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>),
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (handler, tools) = factory();
+    let service = Router::new(handler).with_tools(tools);
 
-pub fn build_streamable_http_service(
+    let stdin = tokio::io::stdin();
+    let stdout = tokio::io::stdout();
+
+    serve_server(service, (stdin, stdout)).await?;
+    Ok(())
+}
+
+pub fn make_streamable_http_service(
     factory: impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Send + Sync + Clone + 'static,
 ) -> StreamableHttpService<Router<GatewaySvc>, LocalSessionManager> {
-    let session_mgr = std::sync::Arc::new(LocalSessionManager::default());
+    let session_mgr = Arc::new(LocalSessionManager::default());
     let cfg = StreamableHttpServerConfig::default();
 
-    let handler_factory = move || {
-        let (handler, router) = factory();
-        Ok(Router::new(handler, router))
+    let service_factory = move || {
+        let (handler, tools) = factory();
+        let service = Router::new(handler).with_tools(tools);
+        Ok(service)
     };
 
-    StreamableHttpService::new(handler_factory, session_mgr, cfg)
+    StreamableHttpService::new(service_factory, session_mgr, cfg)
 }
 
 pub async fn run_stdio(make_handler: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>)) -> anyhow::Result<()> {

@@ -4,33 +4,34 @@ mod clients;
 mod tools;
 mod api;
 
-use axum::routing::any_service;
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, any_service},
+    Router,
+};
 use infra::config::Config;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     infra::logging::init();
-
     let cfg = Config::from_env();
     eprintln!("BOOT irish-mcp-gateway mode={} port={}", cfg.mode, cfg.port);
 
-    // Tool registry
-    let registry = tools::registry::build_registry();
-
-    // Stdio mode (optional)
+    // STDIO mode: run MCP over stdio ONLY (no HTTP).
     if cfg.mode == "stdio" {
-        api::mcp::stdio_loop(registry).await?;
+        infra::mcp::serve_stdio_from(infra::mcp::factory_from_env)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         return Ok(());
     }
 
-    // HTTP server (MCP over /mcp + health)
+    // HTTP server: keep /healthz and mount Streamable HTTP MCP at /mcp.
+    let mcp_service = infra::mcp::make_streamable_http_service(infra::mcp::factory_from_env);
+
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
-        .route("/mcp", post(api::mcp::http))
-        .with_state(registry);
+        // NEW: spec-compliant MCP (POST frames + GET SSE) at the same path
+        .route_service("/mcp", any_service(mcp_service));
 
     let addr: SocketAddr = ([0, 0, 0, 0], cfg.port).into();
     axum::serve(tokio::net::TcpListener::bind(addr).await?, app).await?;

@@ -3,17 +3,19 @@ REGISTRY?=caffalaughrey
 
 .PHONY: build run docker
 build:
-	cargo build -p tools-gateway
+	cargo build --release
 
 run:
 	GRAMADOIR_BASE_URL?=http://localhost:5000 \
 	RUST_LOG=info \
-	cargo run -p tools-gateway
+	MODE=server \
+	cargo run --quiet
 
 mcp-stdio:
 	GRAMADOIR_BASE_URL?=http://localhost:5000 \
 	RUST_LOG=info \
-	cargo run -p tools-gateway -- --stdio
+	MODE=stdio \
+	cargo run --quiet
 
 docker:
 	docker build -t $(REGISTRY)/$(APP) .

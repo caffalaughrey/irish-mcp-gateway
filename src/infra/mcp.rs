@@ -317,6 +317,62 @@ mod tests {
         // If we got here, type constraints & factory shape are satisfied.
     }
 
+    #[tokio::test]
+    async fn factory_from_env_without_base_returns_internal_error() {
+        // Ensure GRAMADOIR_BASE_URL is not set
+        std::env::remove_var("GRAMADOIR_BASE_URL");
+
+        let (svc, _tools) = super::factory_from_env();
+        let mut obj = JsonObject::new();
+        obj.insert("text".to_string(), JsonValue::String("abc".into()));
+
+        let res = svc.gael_grammar_check(Parameters(obj)).await;
+        let err = match res {
+            Err(e) => e,
+            Ok(_) => panic!("expected internal error when base is unset"),
+        };
+        // JSON-RPC internal error is -32603
+        assert_eq!(err.code.0, -32603);
+        assert!(
+            err.message.contains("GRAMADOIR_BASE_URL"),
+            "unexpected message: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn checker_error_maps_to_internal_error() {
+        // FnChecker that always errors
+        let failing = FnChecker::new(|_text: String| async move {
+            Err::<serde_json::Value, Box<dyn std::error::Error + Send + Sync>>(std::io::Error::other("boom").into())
+        });
+        let svc = GatewaySvc::new(Arc::new(failing));
+
+        let mut obj = JsonObject::new();
+        obj.insert("text".to_string(), JsonValue::String("x".into()));
+        let res = svc.gael_grammar_check(Parameters(obj)).await;
+        let err = match res { Err(e) => e, Ok(_) => panic!("expected internal error") };
+        assert_eq!(err.code.0, -32603);
+        assert!(err.message.contains("boom"));
+    }
+
+    #[test]
+    fn make_factory_produces_handler_and_router() {
+        // Dummy checker that returns a fixed JSON
+        let checker = FnChecker::new(|_text: String| async move {
+            Ok(serde_json::json!({"issues": []}))
+        });
+        let factory = super::make_factory(Arc::new(checker));
+        // Closure should be Clone and produce handler+router each time
+        let (handler1, router1) = factory();
+        let (_handler2, router2) = factory();
+        let names1: Vec<String> = router1.into_iter().map(|r| r.name().to_string()).collect();
+        let names2: Vec<String> = router2.into_iter().map(|r| r.name().to_string()).collect();
+        assert!(names1.iter().any(|n| n == "gael.grammar_check"));
+        assert!(names2.iter().any(|n| n == "gael.grammar_check"));
+        // use handler1 to avoid dead code warning
+        let _ = handler1;
+    }
     #[cfg(test)]
     pub fn test_factory_with_checker(
         checker: Arc<dyn GrammarCheck + Send + Sync>,

@@ -36,7 +36,7 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::StatusCode;
+    use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -49,5 +49,23 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn deprecated_route_handles_grammar_check_when_configured() {
+        // Configure env so registry includes grammar tool
+        std::env::set_var("GRAMADOIR_BASE_URL", "http://example");
+        let reg = crate::tools::registry::build_registry();
+        let app = build_app_with_deprecated_api(reg);
+
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
+        let req = Request::builder()
+            .method("POST")
+            .uri("/v1/grammar/check")
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(body))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert!(resp.status().is_success());
     }
 }

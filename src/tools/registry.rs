@@ -10,7 +10,7 @@ pub fn build_registry() -> Registry {
     let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
 
     // Always provide hello
-    let hello: Arc<dyn Tool> = Arc::new(HelloTool::default());
+    let hello: Arc<dyn Tool> = Arc::new(HelloTool);
     map.insert(hello.name(), hello);
 
     // Conditionally include Gramadóir (avoid breaking existing flows if not configured)

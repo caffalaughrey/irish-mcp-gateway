@@ -33,7 +33,7 @@ use crate::clients::gramadoir::GramadoirRemote;
 
 /// Trait abstraction to wrap existing Gramadóir integration without 
 /// touching its types. Return a `serde_json::Value` with the exact
-/// REST shape: `{"issues":[...]}`.
+/// REST shape: `{"issues":[... ]}`.
 #[async_trait::async_trait]
 pub trait GrammarCheck: Send + Sync + 'static {
     async fn check_as_json(&self, text: &str) -> Result<JsonValue, Box<dyn std::error::Error + Send + Sync>>;
@@ -41,25 +41,17 @@ pub trait GrammarCheck: Send + Sync + 'static {
 
 /// Thin wrapper around a boxed async fn, so `main` can adapt whatever
 /// client/type is in use with _zero_ churn elsewhere.
+type JsonError = Box<dyn std::error::Error + Send + Sync>;
+type JsonFuture = Pin<Box<dyn Future<Output = Result<JsonValue, JsonError>> + Send>>;
 pub struct FnChecker {
-    inner: Arc<
-        dyn Fn(
-                String,
-            )
-                -> Pin<
-                    Box<
-                        dyn Future<Output = Result<JsonValue, Box<dyn std::error::Error + Send + Sync>>> + Send,
-                    >,
-                > + Send
-            + Sync,
-    >,
+    inner: Arc<dyn Fn(String) -> JsonFuture + Send + Sync>,
 }
 
 impl FnChecker {
     pub fn new<F, Fut>(f: F) -> Self
     where
         F: Fn(String) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<JsonValue, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+        Fut: Future<Output = Result<JsonValue, JsonError>> + Send + 'static,
     {
         Self { inner: Arc::new(move |s| Box::pin(f(s))) }
     }
@@ -67,7 +59,7 @@ impl FnChecker {
 
 #[async_trait::async_trait]
 impl GrammarCheck for FnChecker {
-    async fn check_as_json(&self, text: &str) -> Result<JsonValue, Box<dyn std::error::Error + Send + Sync>> {
+    async fn check_as_json(&self, text: &str) -> Result<JsonValue, JsonError> {
         (self.inner)(text.to_owned()).await
     }
 }
@@ -80,6 +72,7 @@ pub struct GatewaySvc {
 }
 
 impl GatewaySvc {
+    #[allow(dead_code)]
     pub fn new(checker: Arc<dyn GrammarCheck>) -> Self {
         Self { checker }
     }
@@ -125,6 +118,7 @@ impl GatewaySvc {
 
 /// Factory required by rmcp Streamable HTTP & stdio transports:
 /// must return a `(handler, ToolRouter<handler>)` pair.
+#[allow(dead_code)]
 pub fn make_factory(checker: Arc<dyn GrammarCheck>) -> impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Clone + Send + 'static {
     move || {
         let handler = GatewaySvc::new(checker.clone());
@@ -135,6 +129,7 @@ pub fn make_factory(checker: Arc<dyn GrammarCheck>) -> impl Fn() -> (GatewaySvc,
 
 /// Run stdio MCP server when `MODE=stdio`.
 /// This uses rmcp io transport to speak JSON-RPC over stdin/stdout.
+#[allow(dead_code)]
 pub async fn serve_stdio(
     factory: impl FnOnce() -> (GatewaySvc, ToolRouter<GatewaySvc>),
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -200,9 +195,8 @@ pub fn factory_from_env() -> (GatewaySvc, ToolRouter<GatewaySvc>) {
             // Provide a checker that returns a clear error so the service stays up
             // but clients get actionable feedback until configured.
             let checker = FnChecker::new(|_text: String| async move {
-                Err::<serde_json::Value, Box<dyn std::error::Error + Send + Sync>>(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                Err::<serde_json::Value, JsonError>(
+                    std::io::Error::other(
                         "GRAMADOIR_BASE_URL not configured; set it to enable gael.grammar_check",
                     )
                     .into(),

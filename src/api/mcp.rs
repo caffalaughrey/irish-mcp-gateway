@@ -5,7 +5,7 @@ use serde_json::{json, Value as J};
 use crate::tools::registry::Registry;
 
 #[derive(Deserialize, Debug)]
-pub struct RpcReq { pub jsonrpc: String, pub id: J, pub method: String, #[serde(default)] pub params: J }
+pub struct RpcReq { #[allow(dead_code)] pub jsonrpc: String, pub id: J, pub method: String, #[serde(default)] pub params: J }
 
 #[derive(Serialize, Debug)]
 pub struct RpcResp { pub jsonrpc: &'static str, pub id: J, #[serde(skip_serializing_if = "Option::is_none")] pub result: Option<J>, #[serde(skip_serializing_if = "Option::is_none")] pub error: Option<RpcErr> }
@@ -65,6 +65,7 @@ pub async fn http(
 }
 
 // Stdio loop
+#[allow(dead_code)]
 pub async fn stdio_loop(reg: Registry) -> anyhow::Result<()> {
     eprintln!("mode=stdio");
     let stdin = io::stdin();

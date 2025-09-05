@@ -48,7 +48,7 @@ impl crate::infra::mcp::GrammarCheck for GramadoirRemote {
         let issues = self
             .analyze(text)
             .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
         Ok(serde_json::json!({ "issues": issues }))
     }
 }

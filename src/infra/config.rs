@@ -6,7 +6,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Self {
-        let mode = std::env::var("MODE").unwrap_or_else(|_| "http".into());
+        let mode = std::env::var("MODE").unwrap_or_else(|_| "server".into());
         let port = std::env::var("PORT")
             .ok()
             .and_then(|s| s.parse::<u16>().ok())

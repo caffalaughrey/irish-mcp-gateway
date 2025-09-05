@@ -191,10 +191,26 @@ pub fn factory_with_checker(
 }
 
 pub fn factory_from_env() -> (GatewaySvc, ToolRouter<GatewaySvc>) {
-    let base = std::env::var("GRAMADOIR_BASE_URL")
-        .expect("GRAMADOIR_BASE_URL must be set");
-    let checker = Arc::new(GramadoirRemote::new(base)) as Arc<dyn GrammarCheck + Send + Sync>;
-    factory_with_checker(checker)
+    match std::env::var("GRAMADOIR_BASE_URL") {
+        Ok(base) if !base.trim().is_empty() => {
+            let checker = Arc::new(GramadoirRemote::new(base)) as Arc<dyn GrammarCheck + Send + Sync>;
+            factory_with_checker(checker)
+        }
+        _ => {
+            // Provide a checker that returns a clear error so the service stays up
+            // but clients get actionable feedback until configured.
+            let checker = FnChecker::new(|_text: String| async move {
+                Err::<serde_json::Value, Box<dyn std::error::Error + Send + Sync>>(
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "GRAMADOIR_BASE_URL not configured; set it to enable gael.grammar_check",
+                    )
+                    .into(),
+                )
+            });
+            factory_with_checker(Arc::new(checker) as Arc<dyn GrammarCheck + Send + Sync>)
+        }
+    }
 }
 
 

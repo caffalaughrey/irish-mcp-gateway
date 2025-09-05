@@ -22,10 +22,14 @@ rmcp = { version = "0.5", features = [
   "transport-streamable-http-server-session",
   "transport-worker"
 ] }
+http-body-util = "0.1.3"
+sse-stream = "0.2"
+hyper = "1"
 
 [dev-dependencies]
 httpmock = "0.7"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tower = "0.5"
-hyper = "1"
 serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }

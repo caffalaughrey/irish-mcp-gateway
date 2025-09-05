@@ -2,13 +2,15 @@ use axum::{
     routing::{any_service, get, post},
     Router,
 };
+use std::sync::Arc;
 
 use crate::infra::mcp;
 use crate::tools::registry::Registry;
 
 /// Default, spec-compliant app: `/healthz` + streamable MCP at `/mcp`.
 pub fn build_app_default() -> Router {
-    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env);
+    let session_mgr = Arc::new(rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default());
+    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env, session_mgr);
 
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
@@ -19,12 +21,12 @@ pub fn build_app_default() -> Router {
 pub fn build_app_with_deprecated_api(
     registry: Registry,
 ) -> Router {
-    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env);
+    let session_mgr = Arc::new(rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default());
+    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env, session_mgr);
 
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route_service("/mcp", any_service(mcp_service))
-        // deprecated demo route (kept for rough demo):
         .route("/v1/grammar/check", post(crate::api::mcp::http))
-        .with_state(registry) // <- set Router<Registry> state once; no type mismatch
+        .with_state(registry)
 }

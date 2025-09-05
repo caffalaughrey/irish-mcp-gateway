@@ -35,10 +35,14 @@ RUN cargo build --release
 
 # ---- run
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
 ENV MODE=server
 ENV PORT=8080
 WORKDIR /srv
 COPY --from=builder /app/target/release/irish-mcp-gateway /usr/local/bin/irish-mcp-gateway
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD curl -fsS http://127.0.0.1:${PORT}/healthz || exit 1
+USER 65534:65534
 CMD ["/usr/local/bin/irish-mcp-gateway"]

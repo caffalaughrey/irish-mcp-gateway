@@ -1,7 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
-use crate::domain::Tool;
-use super::hello::HelloTool;
 use super::grammar::GrammarTool;
+use super::hello::HelloTool;
+use crate::domain::Tool;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone)]
 pub struct Registry(pub Arc<HashMap<&'static str, Arc<dyn Tool>>>);
@@ -10,7 +10,7 @@ pub fn build_registry() -> Registry {
     let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
 
     // Always provide hello
-    let hello: Arc<dyn Tool> = Arc::new(HelloTool::default());
+    let hello: Arc<dyn Tool> = Arc::new(HelloTool);
     map.insert(hello.name(), hello);
 
     // Conditionally include Gramadóir (avoid breaking existing flows if not configured)

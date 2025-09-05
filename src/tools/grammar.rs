@@ -11,14 +11,20 @@ pub struct GrammarTool {
 
 impl GrammarTool {
     pub fn new(base_url: impl Into<String>) -> Self {
-        Self { client: GramadoirRemote::new(base_url) }
+        Self {
+            client: GramadoirRemote::new(base_url),
+        }
     }
 }
 
 #[async_trait]
 impl Tool for GrammarTool {
-    fn name(&self) -> &'static str { "gael.grammar_check" }
-    fn description(&self) -> &'static str { "Irish grammar/spell check via Gramadóir (remote)" }
+    fn name(&self) -> &'static str {
+        "gael.grammar_check"
+    }
+    fn description(&self) -> &'static str {
+        "Irish grammar/spell check via Gramadóir (remote)"
+    }
     fn input_schema(&self) -> serde_json::Value {
         json!({
           "type":"object",
@@ -30,7 +36,11 @@ impl Tool for GrammarTool {
         let Some(text) = arguments.get("text").and_then(|v| v.as_str()) else {
             return Err(ToolError::Message("missing 'text'".into()));
         };
-        let issues = self.client.analyze(text).await.map_err(ToolError::Message)?;
+        let issues = self
+            .client
+            .analyze(text)
+            .await
+            .map_err(ToolError::Message)?;
         Ok(json!({ "issues": issues }))
     }
 }

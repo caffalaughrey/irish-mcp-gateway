@@ -1,20 +1,22 @@
-mod infra;
-mod domain;
-mod clients;
-mod tools;
 mod api;
+mod clients;
+mod domain;
+mod infra;
+mod tools;
 
-use std::net::SocketAddr;
 use infra::config::Config;
+use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     infra::logging::init();
 
     let cfg = Config::from_env();
-    eprintln!(
-        "BOOT irish-mcp-gateway mode={} port={} deprecate_rest={}",
-        cfg.mode, cfg.port, cfg.deprecate_rest
+    tracing::info!(
+        mode = %cfg.mode,
+        port = cfg.port,
+        deprecate_rest = cfg.deprecate_rest,
+        "BOOT irish-mcp-gateway"
     );
 
     // Stdio mode: run MCP over stdio ONLY (no HTTP).

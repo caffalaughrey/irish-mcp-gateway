@@ -103,7 +103,7 @@ impl GatewaySvc {
         &self,
         params: Parameters<JsonObject>,
     ) -> Result<rmcp::Json<serde_json::Value>, McpError> {
-        println!("gael_grammar_check invoked with params: {:?}", params.0);
+        tracing::debug!(params = ?params.0, "gael_grammar_check invoked");
         let text = params
             .0
             .get("text")
@@ -116,7 +116,7 @@ impl GatewaySvc {
             .check_as_json(&text)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
-        println!("gael_grammar_check returning payload: {}", payload);
+        tracing::trace!(payload = %payload, "gael_grammar_check returning payload");
 
         // ✅ Spec-compliant: goes to `structuredContent`
         Ok(rmcp::Json(payload))
@@ -164,19 +164,19 @@ pub fn make_streamable_http_service(
     factory: impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Send + Sync + Clone + 'static,
     session_mgr: Arc<LocalSessionManager>,
 ) -> StreamableHttpService<GatewayRouter, LocalSessionManager> {
-    println!("make_streamable_http_service invoked");
+    tracing::info!("make_streamable_http_service invoked");
     let cfg = StreamableHttpServerConfig::default();
-    println!("StreamableHttpServerConfig: stateful_mode={}, keep_alive={:?}", cfg.stateful_mode, cfg.sse_keep_alive);
+    tracing::debug!(stateful_mode = %cfg.stateful_mode, keep_alive = ?cfg.sse_keep_alive, "StreamableHttpServerConfig");
 
     let service_factory = move || {
         let (handler, tools) = factory();
-        println!("service_factory invoked: building Router with tools");
+        tracing::debug!("service_factory invoked: building Router with tools");
         let service = Router::new(handler).with_tools(tools);
         Ok(service)
     };
 
     let svc = StreamableHttpService::new(service_factory, session_mgr.clone(), cfg);
-    println!("StreamableHttpService created; session_mgr ptr={:p}", &*session_mgr);
+    tracing::info!(session_mgr_ptr = ?(&*session_mgr as *const _), "StreamableHttpService created");
     svc
 }
 

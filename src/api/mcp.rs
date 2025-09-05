@@ -36,32 +36,31 @@ pub async fn http(
     axum::extract::State(reg): axum::extract::State<Registry>,
     Json(req): Json<RpcReq>,
 ) -> Json<RpcResp> {
-    println!("HTTP handler invoked for method: {}", req.method);
-    dbg!(&req);
+    tracing::debug!(method = %req.method, id = ?req.id, "HTTP handler invoked");
     let id = req.id.clone();
     let resp = match req.method.as_str() {
         "initialize" => ok(id.clone(), json!({ "serverInfo": { "name": "irish-mcp-gateway", "version": "0.1.0" }, "capabilities": {} })),
         "shutdown" => ok(id.clone(), J::Null),
         "tools.list" | "tools/list" => {
             let resp = ok(id.clone(), tools_list(&reg));
-            dbg!(&resp);
+            tracing::trace!(response = ?resp, "tools.list response");
             resp
         },
         "tools.call" | "tools/call" => match call_tool(&reg, &req.params).await {
             Ok(out) => {
                 let resp = ok(id.clone(), out);
-                dbg!(&resp);
+                tracing::trace!(response = ?resp, "tools.call ok response");
                 resp
             },
             Err(e) => {
                 let resp = err(id.clone(), -32000, e, None);
-                dbg!(&resp);
+                tracing::warn!(response = ?resp, "tools.call error response");
                 resp
             },
         },
         _ => err(id.clone(), -32601, format!("unknown method: {}", req.method), None),
     };
-    dbg!(&resp);
+    tracing::debug!(response = ?resp, "HTTP handler completed");
     Json(resp)
 }
 

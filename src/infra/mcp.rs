@@ -344,14 +344,19 @@ mod tests {
     async fn checker_error_maps_to_internal_error() {
         // FnChecker that always errors
         let failing = FnChecker::new(|_text: String| async move {
-            Err::<serde_json::Value, Box<dyn std::error::Error + Send + Sync>>(std::io::Error::other("boom").into())
+            Err::<serde_json::Value, Box<dyn std::error::Error + Send + Sync>>(
+                std::io::Error::other("boom").into(),
+            )
         });
         let svc = GatewaySvc::new(Arc::new(failing));
 
         let mut obj = JsonObject::new();
         obj.insert("text".to_string(), JsonValue::String("x".into()));
         let res = svc.gael_grammar_check(Parameters(obj)).await;
-        let err = match res { Err(e) => e, Ok(_) => panic!("expected internal error") };
+        let err = match res {
+            Err(e) => e,
+            Ok(_) => panic!("expected internal error"),
+        };
         assert_eq!(err.code.0, -32603);
         assert!(err.message.contains("boom"));
     }
@@ -359,9 +364,8 @@ mod tests {
     #[test]
     fn make_factory_produces_handler_and_router() {
         // Dummy checker that returns a fixed JSON
-        let checker = FnChecker::new(|_text: String| async move {
-            Ok(serde_json::json!({"issues": []}))
-        });
+        let checker =
+            FnChecker::new(|_text: String| async move { Ok(serde_json::json!({"issues": []})) });
         let factory = super::make_factory(Arc::new(checker));
         // Closure should be Clone and produce handler+router each time
         let (handler1, router1) = factory();

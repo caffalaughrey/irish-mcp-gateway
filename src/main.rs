@@ -1,11 +1,11 @@
-mod infra;
-mod domain;
-mod clients;
-mod tools;
 mod api;
+mod clients;
+mod domain;
+mod infra;
+mod tools;
 
-use std::net::SocketAddr;
 use infra::config::Config;
+use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

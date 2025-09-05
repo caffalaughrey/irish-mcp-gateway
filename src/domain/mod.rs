@@ -41,7 +41,9 @@ mod tests {
         let gi = GrammarIssue {
             code: "AGR".into(),
             message: "Agreement issue".into(),
-            start: 1, end: 3, suggestions: vec!["X".into()]
+            start: 1,
+            end: 3,
+            suggestions: vec!["X".into()],
         };
         let v = to_value(&gi).unwrap();
         let back: GrammarIssue = from_value(v).unwrap();

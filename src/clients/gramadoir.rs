@@ -17,12 +17,16 @@ impl GramadoirRemote {
             .timeout(Duration::from_secs(6))
             .build()
             .expect("reqwest client");
-        Self { base: base.into(), http }
+        Self {
+            base: base.into(),
+            http,
+        }
     }
 
     pub async fn analyze(&self, text: &str) -> Result<Vec<GrammarIssue>, String> {
         let url = format!("{}/api/gramadoir/1.0", self.base.trim_end_matches('/'));
-        let resp = self.http
+        let resp = self
+            .http
             .post(url)
             .json(&TeacsReq { teacs: text })
             .send()
@@ -45,40 +49,50 @@ impl crate::infra::mcp::GrammarCheck for GramadoirRemote {
         text: &str,
     ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         // Reuse existing typed call and wrap it as JSON for MCP.
-        let issues = self
-            .analyze(text)
-            .await
-            .map_err(std::io::Error::other)?;
+        let issues = self.analyze(text).await.map_err(std::io::Error::other)?;
         Ok(serde_json::json!({ "issues": issues }))
     }
 }
 
-
 #[derive(Serialize, Deserialize)]
-struct TeacsReq<'a> { teacs: &'a str }
+struct TeacsReq<'a> {
+    teacs: &'a str,
+}
 
 #[derive(Serialize, Deserialize)]
 struct IssueWire {
     // Sample fields seen upstream (strings, sometimes numbers-as-strings)
     context: Option<String>,
-    #[serde(default)] contextoffset: String,
-    #[serde(default)] errorlength: String,
-    #[serde(default)] fromx: String,
-    #[serde(default)] fromy: String,
+    #[serde(default)]
+    contextoffset: String,
+    #[serde(default)]
+    errorlength: String,
+    #[serde(default)]
+    fromx: String,
+    #[serde(default)]
+    fromy: String,
     msg: String,
     #[serde(rename = "ruleId")]
     rule_id: String,
-    #[serde(default)] tox: String,
-    #[serde(default)] toy: String,
+    #[serde(default)]
+    tox: String,
+    #[serde(default)]
+    toy: String,
 }
 
 impl From<IssueWire> for GrammarIssue {
     fn from(w: IssueWire) -> Self {
-        fn parse_usize(s: &str) -> usize { s.parse::<usize>().unwrap_or(0) }
+        fn parse_usize(s: &str) -> usize {
+            s.parse::<usize>().unwrap_or(0)
+        }
         let start = parse_usize(&w.fromx);
         let end = {
             let tox = parse_usize(&w.tox);
-            if tox > 0 { tox } else { start + parse_usize(&w.errorlength) }
+            if tox > 0 {
+                tox
+            } else {
+                start + parse_usize(&w.errorlength)
+            }
         };
         GrammarIssue {
             code: w.rule_id,
@@ -93,8 +107,8 @@ impl From<IssueWire> for GrammarIssue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
     use httpmock::prelude::*;
+    use serde_json::json;
 
     #[tokio::test]
     async fn it_maps_issues_from_remote_array() {
@@ -104,19 +118,20 @@ mod tests {
         let m = server.mock(|when, then| {
             when.method(POST)
                 .path("/api/gramadoir/1.0")
-                .json_body_obj(&TeacsReq { teacs: "Tá an peann ar an bord" });
-            then.status(200)
-                .json_body(json!([IssueWire {
-                    context: Some("Tá an peann ar an bord".into()),
-                    contextoffset: "12".into(),
-                    errorlength: "10".into(),
-                    fromx: "12".into(),
-                    fromy: "0".into(),
-                    msg: "Initial mutation missing".into(),
-                    rule_id: "Lingua::GA::Gramadoir/CLAOCHLU".into(),
-                    tox: "21".into(),
-                    toy: "0".into(),
-                }]));
+                .json_body_obj(&TeacsReq {
+                    teacs: "Tá an peann ar an bord",
+                });
+            then.status(200).json_body(json!([IssueWire {
+                context: Some("Tá an peann ar an bord".into()),
+                contextoffset: "12".into(),
+                errorlength: "10".into(),
+                fromx: "12".into(),
+                fromy: "0".into(),
+                msg: "Initial mutation missing".into(),
+                rule_id: "Lingua::GA::Gramadoir/CLAOCHLU".into(),
+                tox: "21".into(),
+                toy: "0".into(),
+            }]));
         });
 
         let cli = GramadoirRemote::new(server.base_url());

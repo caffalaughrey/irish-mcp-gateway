@@ -11,8 +11,14 @@ impl Config {
             .ok()
             .and_then(|s| s.parse::<u16>().ok())
             .unwrap_or(8080);
-        let deprecate_rest = std::env::var("DEPRECATE_REST").map(|v| !v.is_empty()).unwrap_or(false);
+        let deprecate_rest = std::env::var("DEPRECATE_REST")
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
 
-        Self { mode, port, deprecate_rest }
+        Self {
+            mode,
+            port,
+            deprecate_rest,
+        }
     }
 }

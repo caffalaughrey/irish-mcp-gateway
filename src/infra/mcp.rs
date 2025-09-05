@@ -13,30 +13,31 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use rmcp::{
-    ErrorData as McpError,
-    ServerHandler,
-    model::JsonObject,
     handler::server::{
         router::Router,
         tool::{Parameters, ToolRouter},
     },
-    serve_server,
+    model::JsonObject,
+    serve_server, ErrorData as McpError, ServerHandler,
 };
 
-use rmcp::transport::streamable_http_server::{
-    tower::{StreamableHttpService, StreamableHttpServerConfig},
+use rmcp::transport::streamable_http_server::tower::{
+    StreamableHttpServerConfig, StreamableHttpService,
 };
 
 pub use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 
 use crate::clients::gramadoir::GramadoirRemote;
 
-/// Trait abstraction to wrap existing Gramadóir integration without 
+/// Trait abstraction to wrap existing Gramadóir integration without
 /// touching its types. Return a `serde_json::Value` with the exact
 /// REST shape: `{"issues":[... ]}`.
 #[async_trait::async_trait]
 pub trait GrammarCheck: Send + Sync + 'static {
-    async fn check_as_json(&self, text: &str) -> Result<JsonValue, Box<dyn std::error::Error + Send + Sync>>;
+    async fn check_as_json(
+        &self,
+        text: &str,
+    ) -> Result<JsonValue, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 /// Thin wrapper around a boxed async fn, so `main` can adapt whatever
@@ -53,7 +54,9 @@ impl FnChecker {
         F: Fn(String) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<JsonValue, JsonError>> + Send + 'static,
     {
-        Self { inner: Arc::new(move |s| Box::pin(f(s))) }
+        Self {
+            inner: Arc::new(move |s| Box::pin(f(s))),
+        }
     }
 }
 
@@ -91,7 +94,10 @@ struct CheckInput {
 /// Output: { "issues": [...] }  (plain JSON, just as in the REST API)
 #[rmcp::tool_router]
 impl GatewaySvc {
-    #[rmcp::tool(name = "gael.grammar_check", description = "Run Gramadóir and return {\"issues\": [...]} exactly as JSON")]
+    #[rmcp::tool(
+        name = "gael.grammar_check",
+        description = "Run Gramadóir and return {\"issues\": [...]} exactly as JSON"
+    )]
     async fn gael_grammar_check(
         &self,
         params: Parameters<JsonObject>,
@@ -119,7 +125,9 @@ impl GatewaySvc {
 /// Factory required by rmcp Streamable HTTP & stdio transports:
 /// must return a `(handler, ToolRouter<handler>)` pair.
 #[allow(dead_code)]
-pub fn make_factory(checker: Arc<dyn GrammarCheck>) -> impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Clone + Send + 'static {
+pub fn make_factory(
+    checker: Arc<dyn GrammarCheck>,
+) -> impl Fn() -> (GatewaySvc, ToolRouter<GatewaySvc>) + Clone + Send + 'static {
     move || {
         let handler = GatewaySvc::new(checker.clone());
         let router: ToolRouter<GatewaySvc> = GatewaySvc::tool_router();
@@ -188,7 +196,8 @@ pub fn factory_with_checker(
 pub fn factory_from_env() -> (GatewaySvc, ToolRouter<GatewaySvc>) {
     match std::env::var("GRAMADOIR_BASE_URL") {
         Ok(base) if !base.trim().is_empty() => {
-            let checker = Arc::new(GramadoirRemote::new(base)) as Arc<dyn GrammarCheck + Send + Sync>;
+            let checker =
+                Arc::new(GramadoirRemote::new(base)) as Arc<dyn GrammarCheck + Send + Sync>;
             factory_with_checker(checker)
         }
         _ => {
@@ -206,7 +215,6 @@ pub fn factory_from_env() -> (GatewaySvc, ToolRouter<GatewaySvc>) {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -231,22 +239,33 @@ mod tests {
         fn into(self) -> Arc<dyn GrammarCheck>;
     }
     impl IntoGrammarCheck for FnChecker {
-        fn into(self) -> Arc<dyn GrammarCheck> { Arc::new(self) as Arc<dyn GrammarCheck> }
+        fn into(self) -> Arc<dyn GrammarCheck> {
+            Arc::new(self) as Arc<dyn GrammarCheck>
+        }
     }
 
     #[tokio::test]
     async fn tool_call_success_returns_plain_json_issues() {
         let svc = GatewaySvc::new(dummy_checker());
         let mut obj = JsonObject::new();
-        obj.insert("text".to_string(), JsonValue::String("Tá an peann ar an mbord".into()));
+        obj.insert(
+            "text".to_string(),
+            JsonValue::String("Tá an peann ar an mbord".into()),
+        );
 
         // Method now returns rmcp::Json<serde_json::Value>
-        let rmcp::Json(val) = svc.gael_grammar_check(Parameters(obj)).await.expect("tool should succeed");
+        let rmcp::Json(val) = svc
+            .gael_grammar_check(Parameters(obj))
+            .await
+            .expect("tool should succeed");
 
         let issues = val["issues"].as_array().expect("issues array");
         assert!(!issues.is_empty(), "expected at least one dummy issue");
         assert_eq!(issues[0]["code"], "TEST");
-        assert!(issues[0]["message"].as_str().unwrap().starts_with("ok: Tá an peann"));
+        assert!(issues[0]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("ok: Tá an peann"));
     }
 
     #[tokio::test]
@@ -275,7 +294,11 @@ mod tests {
         let router: ToolRouter<GatewaySvc> = GatewaySvc::tool_router();
         // ToolRouter implements IntoIterator over routes; route.name() yields &str.
         let names: Vec<String> = router.into_iter().map(|r| r.name().to_string()).collect();
-        assert!(names.iter().any(|n| n == "gael.grammar_check"), "missing tool 'gael.grammar_check', got: {:?}", names);
+        assert!(
+            names.iter().any(|n| n == "gael.grammar_check"),
+            "missing tool 'gael.grammar_check', got: {:?}",
+            names
+        );
     }
 
     #[test]

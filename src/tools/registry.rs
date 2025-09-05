@@ -1,7 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
-use crate::domain::Tool;
-use super::hello::HelloTool;
 use super::grammar::GrammarTool;
+use super::hello::HelloTool;
+use crate::domain::Tool;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone)]
 pub struct Registry(pub Arc<HashMap<&'static str, Arc<dyn Tool>>>);

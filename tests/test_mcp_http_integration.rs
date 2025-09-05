@@ -2,16 +2,13 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use axum::{routing::any_service, Router};
-use hyper::{header, Request, StatusCode};
-use serde_json::{json, Value};
-use tower::ServiceExt; // for .oneshot
 use http_body_util::BodyExt; // for .collect
-use tokio::time::{timeout, Duration};
-use rmcp::{
-    Json as McpJson,
-    ErrorData as McpError,
-};
+use hyper::{header, Request, StatusCode};
 use rmcp::model::JsonObject;
+use rmcp::{ErrorData as McpError, Json as McpJson};
+use serde_json::{json, Value};
+use tokio::time::{timeout, Duration};
+use tower::ServiceExt; // for .oneshot
 
 use irish_mcp_gateway::infra::mcp;
 
@@ -128,12 +125,20 @@ async fn tools_list_includes_grammar_check() {
         .body(axum::body::Body::from(init_frame.to_string()))
         .unwrap();
     let init_res = app.clone().oneshot(init_req).await.unwrap();
-    let session_id = init_res.headers().get("MCP-Session-Id").unwrap().to_str().unwrap().to_owned();
+    let session_id = init_res
+        .headers()
+        .get("MCP-Session-Id")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     let init_res_status = init_res.status();
     let init_body_bytes = init_res.into_body().collect().await.unwrap().to_bytes();
     let init_body_str = String::from_utf8_lossy(&init_body_bytes);
     assert!(init_res_status.is_success());
-    let _init_json_str = init_body_str.strip_prefix("data: ").unwrap_or(&init_body_str);
+    let _init_json_str = init_body_str
+        .strip_prefix("data: ")
+        .unwrap_or(&init_body_str);
 
     // Send the required "initialized" notification to complete handshake
     let initialized_notif = json!({
@@ -150,7 +155,10 @@ async fn tools_list_includes_grammar_check() {
         .body(axum::body::Body::from(initialized_notif.to_string()))
         .unwrap();
     let initialized_res = app.clone().oneshot(initialized_req).await.unwrap();
-    println!("initialized notification status: {}", initialized_res.status());
+    println!(
+        "initialized notification status: {}",
+        initialized_res.status()
+    );
     assert_eq!(initialized_res.status(), StatusCode::ACCEPTED);
 
     // 2. POST /mcp tools/list expecting SSE response body with rpcResponse
@@ -165,11 +173,23 @@ async fn tools_list_includes_grammar_check() {
         .body(axum::body::Body::from(frame.to_string()))
         .unwrap();
 
-    let res = timeout(Duration::from_secs(30), app.clone().oneshot(req)).await.expect("tools/list POST timed out").unwrap();
+    let res = timeout(Duration::from_secs(30), app.clone().oneshot(req))
+        .await
+        .expect("tools/list POST timed out")
+        .unwrap();
     assert!(res.status().is_success());
-    assert!(res.headers().get(header::CONTENT_TYPE).unwrap().to_str().unwrap().starts_with("text/event-stream"));
+    assert!(res
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .starts_with("text/event-stream"));
     let body = res.into_body();
-    let bytes = http_body_util::BodyExt::collect(body).await.unwrap().to_bytes();
+    let bytes = http_body_util::BodyExt::collect(body)
+        .await
+        .unwrap()
+        .to_bytes();
     let s = String::from_utf8_lossy(&bytes);
     println!("SSE raw body for tools/list:\n{}", s);
     let v = s
@@ -178,7 +198,13 @@ async fn tools_list_includes_grammar_check() {
         .and_then(|d| serde_json::from_str::<serde_json::Value>(&d).ok())
         .expect("Did not find an rpcResponse for tools/list");
     let tools = v["result"]["tools"].as_array().expect("tools array");
-    assert!(tools.iter().any(|tool| tool["name"] == "gael.grammar_check"), "missing tool 'gael.grammar_check', got: {:?}", tools);
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "gael.grammar_check"),
+        "missing tool 'gael.grammar_check', got: {:?}",
+        tools
+    );
 }
 
 #[tokio::test]
@@ -215,12 +241,20 @@ async fn tools_call_returns_structured_issues() {
         .body(axum::body::Body::from(init_frame.to_string()))
         .unwrap();
     let init_res = app.clone().oneshot(init_req).await.unwrap();
-    let session_id = init_res.headers().get("MCP-Session-Id").unwrap().to_str().unwrap().to_owned();
+    let session_id = init_res
+        .headers()
+        .get("MCP-Session-Id")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     let init_res_status = init_res.status();
     let init_body_bytes = init_res.into_body().collect().await.unwrap().to_bytes();
     let init_body_str = String::from_utf8_lossy(&init_body_bytes);
     assert!(init_res_status.is_success());
-    let _init_json_str = init_body_str.strip_prefix("data: ").unwrap_or(&init_body_str);
+    let _init_json_str = init_body_str
+        .strip_prefix("data: ")
+        .unwrap_or(&init_body_str);
 
     // Send the required "initialized" notification to complete handshake
     let initialized_notif = json!({
@@ -237,7 +271,10 @@ async fn tools_call_returns_structured_issues() {
         .body(axum::body::Body::from(initialized_notif.to_string()))
         .unwrap();
     let initialized_res = app.clone().oneshot(initialized_req).await.unwrap();
-    println!("initialized notification status: {}", initialized_res.status());
+    println!(
+        "initialized notification status: {}",
+        initialized_res.status()
+    );
     assert_eq!(initialized_res.status(), StatusCode::ACCEPTED);
 
     // 2. POST /mcp tools/call (expect SSE body with rpcResponse)
@@ -257,10 +294,17 @@ async fn tools_call_returns_structured_issues() {
         .unwrap();
 
     // Send the POST request and consume its SSE body directly
-    let sse_res = app.clone().oneshot(req).await.expect("Tools call POST request failed");
+    let sse_res = app
+        .clone()
+        .oneshot(req)
+        .await
+        .expect("Tools call POST request failed");
     assert!(sse_res.status().is_success());
     let body = sse_res.into_body();
-    let bytes = http_body_util::BodyExt::collect(body).await.unwrap().to_bytes();
+    let bytes = http_body_util::BodyExt::collect(body)
+        .await
+        .unwrap()
+        .to_bytes();
     let s = String::from_utf8_lossy(&bytes);
     println!("SSE raw body for tools/call:\n{}", s);
     let v = s
@@ -272,7 +316,9 @@ async fn tools_call_returns_structured_issues() {
 
     let json_rpc_response = v.as_object().expect("rpc response object");
     // Extract structured content JSON payload: result.structuredContent.issues
-    let issues = json_rpc_response["result"]["structuredContent"]["issues"].as_array().expect("issues array");
+    let issues = json_rpc_response["result"]["structuredContent"]["issues"]
+        .as_array()
+        .expect("issues array");
     assert!(!issues.is_empty(), "expected at least one dummy issue");
     assert_eq!(issues[0]["code"], "TEST");
     assert_eq!(issues[0]["message"].as_str().unwrap(), "ok");
@@ -337,7 +383,9 @@ async fn get_mcp_sse_negotiates_event_stream() {
 
         assert!(res_status.is_success());
         assert!(ctype.is_some() && ctype.unwrap().starts_with("text/event-stream"));
-    }).await.expect("Test timed out");
+    })
+    .await
+    .expect("Test timed out");
 }
 
 // Optional live upstream check; set GRAMADOIR_BASE_URL
@@ -345,10 +393,14 @@ async fn get_mcp_sse_negotiates_event_stream() {
 #[ignore]
 async fn external_gramadoir_smoke() {
     let base = std::env::var("GRAMADOIR_BASE_URL").expect("set GRAMADOIR_BASE_URL");
-    let checker = Arc::new(irish_mcp_gateway::clients::gramadoir::GramadoirRemote::new(base))
-        as Arc<dyn mcp::GrammarCheck + Send + Sync>;
+    let checker = Arc::new(irish_mcp_gateway::clients::gramadoir::GramadoirRemote::new(
+        base,
+    )) as Arc<dyn mcp::GrammarCheck + Send + Sync>;
     let session_mgr = Arc::new(mcp::LocalSessionManager::default());
-    let svc = mcp::make_streamable_http_service(move || mcp::factory_with_checker(checker.clone()), session_mgr);
+    let svc = mcp::make_streamable_http_service(
+        move || mcp::factory_with_checker(checker.clone()),
+        session_mgr,
+    );
     let app = Router::new().route_service("/mcp", any_service(svc));
 
     let frame = json!({
@@ -367,7 +419,9 @@ async fn external_gramadoir_smoke() {
 
     let res = app.oneshot(req).await.unwrap();
     assert!(res.status().is_success());
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 20)
+        .await
+        .unwrap();
     let v: Value = serde_json::from_slice(&bytes).unwrap();
     assert!(v["result"]["structuredContent"][0]["json"]["issues"].is_array());
 }

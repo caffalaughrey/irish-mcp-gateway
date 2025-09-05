@@ -7,3 +7,13 @@ pub fn init() {
         .with_target(false)
         .try_init();
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn init_is_idempotent() {
+        super::init();
+        super::init();
+        assert!(true);
+    }
+}

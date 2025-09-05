@@ -32,3 +32,22 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
         .route("/v1/grammar/check", post(crate::api::mcp::http))
         .with_state(registry)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn healthz_responds_ok_on_default_app() {
+        let app = build_app_default();
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}

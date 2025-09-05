@@ -25,6 +25,8 @@ rmcp = { version = "0.5", features = [
 http-body-util = "0.1.3"
 sse-stream = "0.2"
 hyper = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 [dev-dependencies]
 httpmock = "0.7"

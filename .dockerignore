@@ -1,0 +1,15 @@
+target
+debug
+.git
+.github
+.gitignore
+**/*.rs.bk
+**/mutants.out*/
+.DS_Store
+Cargo.lock
+scripts
+tests
+streaming_with_rmcp_tools.rs
+integration-test-findings.md
+rmcp-findings.md
+

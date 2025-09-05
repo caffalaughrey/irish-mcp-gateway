@@ -4,16 +4,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as J};
 use crate::tools::registry::Registry;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct RpcReq { pub jsonrpc: String, pub id: J, pub method: String, #[serde(default)] pub params: J }
 
-#[derive(Serialize)]
-pub struct RpcResp {
-    pub jsonrpc: &'static str, pub id: J,
-    #[serde(skip_serializing_if = "Option::is_none")] pub result: Option<J>,
-    #[serde(skip_serializing_if = "Option::is_none")] pub error: Option<RpcErr>,
-}
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
+pub struct RpcResp { pub jsonrpc: &'static str, pub id: J, #[serde(skip_serializing_if = "Option::is_none")] pub result: Option<J>, #[serde(skip_serializing_if = "Option::is_none")] pub error: Option<RpcErr> }
+#[derive(Serialize, Debug)]
 pub struct RpcErr { pub code: i32, pub message: String, #[serde(skip_serializing_if = "Option::is_none")] pub data: Option<J> }
 
 fn ok(id: J, result: J) -> RpcResp { RpcResp { jsonrpc: "2.0", id, result: Some(result), error: None } }
@@ -40,15 +36,32 @@ pub async fn http(
     axum::extract::State(reg): axum::extract::State<Registry>,
     Json(req): Json<RpcReq>,
 ) -> Json<RpcResp> {
+    println!("HTTP handler invoked for method: {}", req.method);
+    dbg!(&req);
     let id = req.id.clone();
     let resp = match req.method.as_str() {
-        "tools.list" | "tools/list" => ok(id, tools_list(&reg)),
-        "tools.call" | "tools/call" => match call_tool(&reg, &req.params).await {
-            Ok(out) => ok(id, out),
-            Err(e) => err(id, -32000, e, None),
+        "initialize" => ok(id.clone(), json!({ "serverInfo": { "name": "irish-mcp-gateway", "version": "0.1.0" }, "capabilities": {} })),
+        "shutdown" => ok(id.clone(), J::Null),
+        "tools.list" | "tools/list" => {
+            let resp = ok(id.clone(), tools_list(&reg));
+            dbg!(&resp);
+            resp
         },
-        _ => err(id, -32601, format!("unknown method: {}", req.method), None),
+        "tools.call" | "tools/call" => match call_tool(&reg, &req.params).await {
+            Ok(out) => {
+                let resp = ok(id.clone(), out);
+                dbg!(&resp);
+                resp
+            },
+            Err(e) => {
+                let resp = err(id.clone(), -32000, e, None);
+                dbg!(&resp);
+                resp
+            },
+        },
+        _ => err(id.clone(), -32601, format!("unknown method: {}", req.method), None),
     };
+    dbg!(&resp);
     Json(resp)
 }
 
@@ -66,6 +79,7 @@ pub async fn stdio_loop(reg: Registry) -> anyhow::Result<()> {
                 let id = r.id.clone();
                 match r.method.as_str() {
                     "tools.list" | "tools/list" => ok(id, tools_list(&reg)),
+                    "initialize" => ok(id, json!({ "serverInfo": { "name": "irish-mcp-gateway", "version": "0.1.0" }, "capabilities": {} })),
                     "tools.call" | "tools/call" => match call_tool(&reg, &r.params).await {
                         Ok(out) => ok(id, out),
                         Err(e) => err(id, -32000, e, None),

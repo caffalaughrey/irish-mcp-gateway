@@ -5,7 +5,6 @@ mod tools;
 mod api;
 
 use std::net::SocketAddr;
-use axum::{routing::{get, post}, Router};
 use infra::config::Config;
 
 #[tokio::main]
@@ -13,22 +12,28 @@ async fn main() -> anyhow::Result<()> {
     infra::logging::init();
 
     let cfg = Config::from_env();
-    eprintln!("BOOT irish-mcp-gateway mode={} port={}", cfg.mode, cfg.port);
+    eprintln!(
+        "BOOT irish-mcp-gateway mode={} port={} deprecate_rest={}",
+        cfg.mode, cfg.port, cfg.deprecate_rest
+    );
 
-    // Tool registry
-    let registry = tools::registry::build_registry();
-
-    // Stdio mode (optional)
+    // Stdio mode: run MCP over stdio ONLY (no HTTP).
     if cfg.mode == "stdio" {
-        api::mcp::stdio_loop(registry).await?;
+        infra::mcp::serve_stdio_from(infra::mcp::factory_from_env)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         return Ok(());
     }
 
-    // HTTP server (MCP over /mcp + health)
-    let app = Router::new()
-        .route("/healthz", get(|| async { "ok" }))
-        .route("/mcp", post(api::mcp::http))
-        .with_state(registry);
+    // HTTP server
+    let app = if cfg.deprecate_rest {
+        // Spec-only: /healthz + streamable HTTP MCP on /mcp
+        infra::http_app::build_app_default()
+    } else {
+        // Spec + demo REST: add /v1/grammar/check
+        let registry = tools::registry::build_registry();
+        infra::http_app::build_app_with_deprecated_api(registry)
+    };
 
     let addr: SocketAddr = ([0, 0, 0, 0], cfg.port).into();
     axum::serve(tokio::net::TcpListener::bind(addr).await?, app).await?;

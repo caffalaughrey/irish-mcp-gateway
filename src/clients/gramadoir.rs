@@ -38,6 +38,22 @@ impl GramadoirRemote {
     }
 }
 
+#[async_trait::async_trait]
+impl crate::infra::mcp::GrammarCheck for GramadoirRemote {
+    async fn check_as_json(
+        &self,
+        text: &str,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        // Reuse existing typed call and wrap it as JSON for MCP.
+        let issues = self
+            .analyze(text)
+            .await
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(serde_json::json!({ "issues": issues }))
+    }
+}
+
+
 #[derive(Serialize, Deserialize)]
 struct TeacsReq<'a> { teacs: &'a str }
 

@@ -2,7 +2,7 @@
 # irish-mcp-gateway
 
 [![CI](https://github.com/caffalaughrey/irish-mcp-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/caffalaughrey/irish-mcp-gateway/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/caffalaughrey/irish-mcp-gateway/branch/tech-debt/graph/badge.svg)](https://codecov.io/gh/caffalaughrey/irish-mcp-gateway)
+[![codecov](https://codecov.io/gh/caffalaughrey/irish-mcp-gateway/branch/main/graph/badge.svg)](https://codecov.io/gh/caffalaughrey/irish-mcp-gateway)
 ## Get started
 ### Build and run
 ```bash

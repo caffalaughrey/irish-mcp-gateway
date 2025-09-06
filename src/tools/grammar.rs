@@ -17,6 +17,8 @@ impl GrammarTool {
     }
 }
 
+pub mod tool_router;
+
 #[async_trait]
 impl Tool for GrammarTool {
     fn name(&self) -> &'static str {

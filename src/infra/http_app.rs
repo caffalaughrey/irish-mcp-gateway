@@ -5,15 +5,22 @@ use axum::{
 use std::sync::Arc;
 
 use crate::infra::mcp;
+use crate::infra::runtime::mcp_transport;
+use crate::tools::grammar::tool_router as grammar_router;
 use crate::api::mcp2;
 use crate::tools::registry2::ToolRegistry as ToolRegistryV2;
 
 /// Default, spec-compliant app: `/healthz` + streamable MCP at `/mcp`.
 pub fn build_app_default() -> Router {
-    let session_mgr = Arc::new(
-        rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
-    );
-    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env, session_mgr);
+    // Use the refactored transport seam + grammar tool router for MCP HTTP
+    let session_mgr = Arc::new(mcp_transport::LocalSessionManager::default());
+    let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
+    let factory = move || {
+        let handler = grammar_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base.clone()) };
+        let tools: grammar_router::GrammarRouter = grammar_router::GrammarSvc::router();
+        (handler, tools)
+    };
+    let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
 
     Router::new()
         .route("/healthz", get(|| async { "ok" }))

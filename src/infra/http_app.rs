@@ -1,11 +1,46 @@
 use axum::{
     routing::{any_service, get, post},
-    Router,
+    Router, Json,
 };
 use std::sync::Arc;
+use serde_json::{json, Value};
 
 use crate::infra::runtime::mcp_transport;
 use crate::tools::registry::Registry;
+
+/// Enhanced health check endpoint with service status
+async fn health_check() -> Json<Value> {
+    let mut status = json!({
+        "status": "healthy",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "version": env!("CARGO_PKG_VERSION"),
+        "services": {}
+    });
+    
+    // Check grammar service if configured
+    if let Ok(grammar_url) = std::env::var("GRAMADOIR_BASE_URL") {
+        if !grammar_url.is_empty() {
+            let client = crate::clients::gramadoir::GramadoirRemote::new(grammar_url);
+            match client.analyze("test").await {
+                Ok(_) => {
+                    status["services"]["grammar"] = json!({
+                        "status": "healthy",
+                        "url": std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default()
+                    });
+                }
+                Err(_) => {
+                    status["services"]["grammar"] = json!({
+                        "status": "unhealthy",
+                        "url": std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default()
+                    });
+                    status["status"] = json!("degraded");
+                }
+            }
+        }
+    }
+    
+    Json(status)
+}
 
 /// Default, spec-compliant app: `/healthz` + streamable MCP at `/mcp`.
 pub fn build_app_default() -> Router {
@@ -21,7 +56,7 @@ pub fn build_app_default() -> Router {
     let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
 
     Router::new()
-        .route("/healthz", get(|| async { "ok" }))
+        .route("/healthz", get(health_check))
         .route_service("/mcp", any_service(mcp_service))
 }
 
@@ -39,7 +74,7 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
     let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
 
     Router::new()
-        .route("/healthz", get(|| async { "ok" }))
+        .route("/healthz", get(health_check))
         .route_service("/mcp", any_service(mcp_service))
         .route("/v1/grammar/check", post(crate::api::mcp::http))
         .with_state(registry)
@@ -61,6 +96,34 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        
+        // Check response body is JSON
+        let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // Status can be "healthy" or "degraded" depending on grammar service availability
+        assert!(matches!(json["status"].as_str(), Some("healthy") | Some("degraded")));
+        assert!(json["timestamp"].is_string());
+        assert!(json["version"].is_string());
+    }
+
+    #[tokio::test]
+    async fn healthz_returns_structured_response() {
+        let app = build_app_default();
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        
+        let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        
+        // Verify required fields
+        assert!(json["status"].is_string());
+        assert!(json["timestamp"].is_string());
+        assert!(json["version"].is_string());
+        assert!(json["services"].is_object());
     }
 
     #[tokio::test]

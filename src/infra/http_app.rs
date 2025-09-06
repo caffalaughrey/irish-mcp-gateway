@@ -4,20 +4,18 @@ use axum::{
 };
 use std::sync::Arc;
 
-use crate::infra::mcp;
 use crate::infra::runtime::mcp_transport;
-use crate::tools::grammar::tool_router as grammar_router;
-use crate::api::mcp2;
-use crate::tools::registry2::ToolRegistry as ToolRegistryV2;
+use crate::tools::registry::Registry;
 
 /// Default, spec-compliant app: `/healthz` + streamable MCP at `/mcp`.
 pub fn build_app_default() -> Router {
-    // Use the refactored transport seam + grammar tool router for MCP HTTP
-    let session_mgr = Arc::new(mcp_transport::LocalSessionManager::default());
-    let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
-    let factory = move || {
-        let handler = grammar_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base.clone()) };
-        let tools: grammar_router::GrammarRouter = grammar_router::GrammarSvc::router();
+    let session_mgr = Arc::new(
+        rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
+    );
+    let factory = || {
+        let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
+        let handler = crate::tools::grammar::tool_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base) };
+        let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
         (handler, tools)
     };
     let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
@@ -28,16 +26,22 @@ pub fn build_app_default() -> Router {
 }
 
 /// Spec app **plus** deprecated demo REST route at `/v1/grammar/check`.
-pub fn build_app_with_deprecated_api(registry: ToolRegistryV2) -> Router {
+pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
     let session_mgr = Arc::new(
         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
     );
-    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env, session_mgr);
+    let factory = || {
+        let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
+        let handler = crate::tools::grammar::tool_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base) };
+        let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
+        (handler, tools)
+    };
+    let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
 
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route_service("/mcp", any_service(mcp_service))
-        .route("/v1/grammar/check", post(mcp2::http))
+        .route("/v1/grammar/check", post(crate::api::mcp::http))
         .with_state(registry)
 }
 
@@ -61,11 +65,12 @@ mod tests {
 
     #[tokio::test]
     async fn deprecated_route_handles_grammar_check_when_configured() {
-        // Use v2 registry and call spellcheck placeholder to avoid external dependency
-        let reg = crate::tools::registry2::build_registry_v2_from_env();
+        // Configure env so registry includes grammar tool
+        std::env::set_var("GRAMADOIR_BASE_URL", "http://example");
+        let reg = crate::tools::registry::build_registry();
         let app = build_app_with_deprecated_api(reg);
 
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
         let req = Request::builder()
             .method("POST")
             .uri("/v1/grammar/check")

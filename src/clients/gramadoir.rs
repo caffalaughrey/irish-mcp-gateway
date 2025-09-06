@@ -51,17 +51,7 @@ impl GramadoirRemote {
     }
 }
 
-#[async_trait::async_trait]
-impl crate::infra::mcp::GrammarCheck for GramadoirRemote {
-    async fn check_as_json(
-        &self,
-        text: &str,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-        // Reuse existing typed call and wrap it as JSON for MCP.
-        let issues = self.analyze(text).await.map_err(std::io::Error::other)?;
-        Ok(serde_json::json!({ "issues": issues }))
-    }
-}
+// Deprecated adapter removed: GramadoirRemote is used directly by the grammar tool router now.
 
 #[derive(Serialize, Deserialize)]
 struct TeacsReq<'a> {

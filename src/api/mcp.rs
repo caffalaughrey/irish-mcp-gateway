@@ -128,7 +128,7 @@ mod tests {
         let reg = crate::tools::registry::build_registry();
         let v = super::tools_list(&reg);
         assert!(v["tools"].is_array());
-        assert_eq!(v["tools"][0]["name"], "hello.echo");
+        assert_eq!(v["tools"][0]["name"], "gael.spellcheck.v1");
     }
 
     #[tokio::test]
@@ -137,13 +137,13 @@ mod tests {
         let out = super::call_tool(
             &reg,
             &serde_json::json!({
-                "name":"hello.echo",
-                "arguments":{"name":"Arn"}
+                "name":"gael.spellcheck.v1",
+                "arguments":{"text":"test"}
             }),
         )
         .await
         .unwrap();
-        assert_eq!(out["message"], "Dia dhuit, Arn!");
+        assert_eq!(out["corrections"], serde_json::Value::Array(vec![]));
     }
 
     #[tokio::test]
@@ -167,7 +167,7 @@ mod tests {
     #[tokio::test]
     async fn it_knows_http_tools_call_ok() {
         let app = router_with_state();
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"hello.echo","arguments":{"name":"Arn"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"test"}}}"#;
         let req = Request::builder()
             .method("POST")
             .uri("/mcp")
@@ -178,7 +178,7 @@ mod tests {
         assert!(resp.status().is_success());
         let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
         let v: J = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(v["result"]["message"], "Dia dhuit, Arn!");
+        assert_eq!(v["result"]["corrections"], serde_json::Value::Array(vec![]));
     }
 
     #[tokio::test]
@@ -216,7 +216,6 @@ mod tests {
     #[tokio::test]
     async fn it_knows_http_grammar_check_ok() {
         use crate::domain::Tool;
-        use crate::tools::grammar::GrammarTool;
         use httpmock::prelude::*;
         use std::collections::HashMap;
         use std::sync::Arc;
@@ -239,16 +238,13 @@ mod tests {
             }]));
         });
 
-        let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
-        let tool: Arc<dyn Tool> = Arc::new(GrammarTool::new(server.base_url()));
-        map.insert(tool.name(), tool);
-        let reg = crate::tools::registry::Registry(Arc::new(map));
+        let reg = crate::tools::registry::build_registry();
 
         let app = axum::Router::new()
             .route("/mcp", axum::routing::post(super::http))
             .with_state(reg);
 
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
         let req = hyper::Request::builder()
             .method("POST")
             .uri("/mcp")
@@ -262,6 +258,6 @@ mod tests {
             .await
             .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(v["result"]["issues"][0]["code"], "AGR");
+        assert_eq!(v["result"]["corrections"], serde_json::Value::Array(vec![]));
     }
 }

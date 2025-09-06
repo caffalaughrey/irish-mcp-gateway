@@ -29,9 +29,9 @@ async fn it_knows_e2e_list_and_call() {
     let call = Request::builder()
         .method("POST").uri("/mcp")
         .header("content-type","application/json")
-        .body(Body::from(r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"hello.echo","arguments":{"name":"Arn"}}}"#)).unwrap();
+        .body(Body::from(r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"test"}}}"#)).unwrap();
     let resp = app.clone().oneshot(call).await.unwrap();
     let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
     let v: J = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(v["result"]["message"], "Dia dhuit, Arn!");
+    assert_eq!(v["result"]["corrections"], serde_json::Value::Array(vec![]));
 }

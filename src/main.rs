@@ -22,7 +22,13 @@ async fn main() -> anyhow::Result<()> {
 
     // Stdio mode: run MCP over stdio ONLY (no HTTP).
     if cfg.mode == "stdio" {
-        infra::mcp::serve_stdio_from(infra::mcp::factory_from_env)
+        let factory = || {
+            let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
+            let handler = crate::tools::grammar::tool_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base) };
+            let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
+            (handler, tools)
+        };
+        crate::infra::runtime::mcp_transport::serve_stdio(factory)
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
         return Ok(());
@@ -32,9 +38,9 @@ async fn main() -> anyhow::Result<()> {
     let app = if cfg.deprecate_rest {
         infra::http_app::build_app_default()
     } else {
-        // Use new registry v2 for deprecated REST path
-        let registry_v2 = tools::registry2::build_registry_v2_from_env();
-        infra::http_app::build_app_with_deprecated_api(registry_v2)
+        // Spec + demo REST: add /v1/grammar/check using legacy registry for demo only
+        let registry = tools::registry::build_registry();
+        infra::http_app::build_app_with_deprecated_api(registry)
     };
 
     let addr: SocketAddr = ([0, 0, 0, 0], cfg.port).into();

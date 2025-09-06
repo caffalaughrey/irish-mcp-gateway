@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Minimal session store abstraction for future Redis swap.
+/// TODO(next branch): add Redis-backed SessionStore and wire behind a feature flag.
 #[derive(Clone, Default)]
 pub struct InMemorySessionStore {
     inner: Arc<Mutex<HashMap<String, serde_json::Value>>>,

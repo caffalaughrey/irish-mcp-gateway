@@ -4,23 +4,28 @@ use std::sync::{Arc, Mutex};
 /// Minimal session store abstraction for future Redis swap.
 /// TODO(next branch): add Redis-backed SessionStore and wire behind a feature flag.
 #[derive(Clone, Default)]
+#[allow(dead_code)]
 pub struct InMemorySessionStore {
     inner: Arc<Mutex<HashMap<String, serde_json::Value>>>,
 }
 
 impl InMemorySessionStore {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, key: &str) -> Option<serde_json::Value> {
         self.inner.lock().unwrap().get(key).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn set(&self, key: impl Into<String>, val: serde_json::Value) {
         self.inner.lock().unwrap().insert(key.into(), val);
     }
 
+    #[allow(dead_code)]
     pub fn delete(&self, key: &str) {
         self.inner.lock().unwrap().remove(key);
     }

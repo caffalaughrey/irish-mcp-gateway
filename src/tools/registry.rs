@@ -1,4 +1,4 @@
-use crate::core::tool::{Tool, ToolSpec};
+use crate::core::tool::Tool;
 use crate::tools::spellcheck::{SpellcheckLocalBackend, SpellcheckRemoteBackend};
 use std::{collections::HashMap, sync::Arc};
 

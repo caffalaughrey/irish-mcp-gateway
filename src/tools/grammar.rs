@@ -2,14 +2,16 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use crate::clients::gramadoir::GramadoirRemote;
-use crate::domain::{Tool, ToolError};
+use crate::core::tool::{Tool, ToolSpec};
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct GrammarTool {
     client: GramadoirRemote,
 }
 
 impl GrammarTool {
+    #[allow(dead_code)]
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
             client: GramadoirRemote::new(base_url),
@@ -19,13 +21,12 @@ impl GrammarTool {
 
 pub mod tool_router;
 
-#[async_trait]
-impl Tool for GrammarTool {
+impl ToolSpec for GrammarTool {
     fn name(&self) -> &'static str {
         "gael.grammar_check"
     }
     fn description(&self) -> &'static str {
-        "Irish grammar/spell check via Gramadóir (remote)"
+        "Irish grammar/spell check via Gramadóir"
     }
     fn input_schema(&self) -> serde_json::Value {
         json!({
@@ -34,15 +35,19 @@ impl Tool for GrammarTool {
           "required": ["text"]
         })
     }
-    async fn call(&self, arguments: &serde_json::Value) -> Result<serde_json::Value, ToolError> {
+}
+
+#[async_trait]
+impl Tool for GrammarTool {
+    async fn call(&self, arguments: &serde_json::Value) -> Result<serde_json::Value, String> {
         let Some(text) = arguments.get("text").and_then(|v| v.as_str()) else {
-            return Err(ToolError::Message("missing 'text'".into()));
+            return Err("missing 'text'".to_string());
         };
         let issues = self
             .client
             .analyze(text)
             .await
-            .map_err(ToolError::Message)?;
+            .map_err(|e| e.to_string())?;
         Ok(json!({ "issues": issues }))
     }
 }

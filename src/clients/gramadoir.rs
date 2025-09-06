@@ -1,6 +1,5 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 use crate::domain::GrammarIssue;
 use crate::infra::runtime::limits::{make_http_client, retry_async};

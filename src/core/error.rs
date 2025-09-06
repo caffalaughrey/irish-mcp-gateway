@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 /// Gateway-wide error model for uniform HTTP/JSON mapping.
+#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum GatewayError {
     #[error("{0}")]

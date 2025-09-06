@@ -4,6 +4,7 @@ use crate::core::tool::{Tool, ToolSpec};
 
 #[derive(Clone)]
 pub struct SpellcheckRemoteBackend {
+    #[allow(dead_code)]
     pub(crate) base_url: String,
 }
 

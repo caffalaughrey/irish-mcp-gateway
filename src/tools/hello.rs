@@ -1,12 +1,12 @@
-use crate::domain::{Tool, ToolError};
+use crate::core::tool::{Tool, ToolSpec};
 use async_trait::async_trait;
 use serde_json::json;
 
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct HelloTool;
 
-#[async_trait]
-impl Tool for HelloTool {
+impl ToolSpec for HelloTool {
     fn name(&self) -> &'static str {
         "hello.echo"
     }
@@ -16,7 +16,11 @@ impl Tool for HelloTool {
     fn input_schema(&self) -> serde_json::Value {
         json!({ "type":"object", "properties": { "name": { "type":"string" } }, "required": [] })
     }
-    async fn call(&self, arguments: &serde_json::Value) -> Result<serde_json::Value, ToolError> {
+}
+
+#[async_trait]
+impl Tool for HelloTool {
+    async fn call(&self, arguments: &serde_json::Value) -> Result<serde_json::Value, String> {
         let name = arguments
             .get("name")
             .and_then(|v| v.as_str())

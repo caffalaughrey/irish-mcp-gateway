@@ -1,11 +1,10 @@
 use crate::tools::registry::Registry;
 use axum::Json;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as J};
 use std::io::{self, BufRead, Write};
 
 use crate::core::mcp::{err as rpc_err, ok as rpc_ok};
-use crate::core::mcp::{RpcErr, RpcReq, RpcResp};
+use crate::core::mcp::{RpcReq, RpcResp};
 use crate::infra::http::json as http_json;
 
 fn tools_list(reg: &Registry) -> J {
@@ -215,10 +214,8 @@ mod tests {
 
     #[tokio::test]
     async fn it_knows_http_grammar_check_ok() {
-        use crate::domain::Tool;
+        // Tool trait not used in this test but kept for reference
         use httpmock::prelude::*;
-        use std::collections::HashMap;
-        use std::sync::Arc;
 
         let server = MockServer::start();
         server.mock(|when, then| {

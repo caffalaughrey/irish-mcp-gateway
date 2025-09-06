@@ -1,9 +1,9 @@
 use axum::{
     routing::{any_service, get, post},
-    Router, Json,
+    Json, Router,
 };
-use std::sync::Arc;
 use serde_json::{json, Value};
+use std::sync::Arc;
 
 use crate::infra::runtime::mcp_transport;
 use crate::tools::registry::Registry;
@@ -16,7 +16,7 @@ async fn health_check() -> Json<Value> {
         "version": env!("CARGO_PKG_VERSION"),
         "services": {}
     });
-    
+
     // Check grammar service if configured
     if let Ok(grammar_url) = std::env::var("GRAMADOIR_BASE_URL") {
         if !grammar_url.is_empty() {
@@ -38,7 +38,7 @@ async fn health_check() -> Json<Value> {
             }
         }
     }
-    
+
     Json(status)
 }
 
@@ -49,7 +49,9 @@ pub fn build_app_default() -> Router {
     );
     let factory = || {
         let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
-        let handler = crate::tools::grammar::tool_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base) };
+        let handler = crate::tools::grammar::tool_router::GrammarSvc {
+            checker: crate::clients::gramadoir::GramadoirRemote::new(base),
+        };
         let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
         (handler, tools)
     };
@@ -67,7 +69,9 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
     );
     let factory = || {
         let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
-        let handler = crate::tools::grammar::tool_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base) };
+        let handler = crate::tools::grammar::tool_router::GrammarSvc {
+            checker: crate::clients::gramadoir::GramadoirRemote::new(base),
+        };
         let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
         (handler, tools)
     };
@@ -96,12 +100,15 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        
+
         // Check response body is JSON
         let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         // Status can be "healthy" or "degraded" depending on grammar service availability
-        assert!(matches!(json["status"].as_str(), Some("healthy") | Some("degraded")));
+        assert!(matches!(
+            json["status"].as_str(),
+            Some("healthy") | Some("degraded")
+        ));
         assert!(json["timestamp"].is_string());
         assert!(json["version"].is_string());
     }
@@ -115,10 +122,10 @@ mod tests {
             .body(axum::body::Body::empty())
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
-        
+
         let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        
+
         // Verify required fields
         assert!(json["status"].is_string());
         assert!(json["timestamp"].is_string());

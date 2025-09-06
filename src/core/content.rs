@@ -7,7 +7,9 @@ use serde_json::Value as JsonValue;
 pub struct StructuredJson(pub JsonValue);
 
 impl From<JsonValue> for StructuredJson {
-    fn from(v: JsonValue) -> Self { StructuredJson(v) }
+    fn from(v: JsonValue) -> Self {
+        StructuredJson(v)
+    }
 }
 
 #[cfg(test)]
@@ -20,5 +22,3 @@ mod tests {
         assert_eq!(s.0, val);
     }
 }
-
-

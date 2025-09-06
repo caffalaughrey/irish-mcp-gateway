@@ -33,10 +33,24 @@ pub struct RpcErr {
 }
 
 pub fn ok(id: J, result: J) -> RpcResp {
-    RpcResp { jsonrpc: "2.0", id, result: Some(result), error: None }
+    RpcResp {
+        jsonrpc: "2.0",
+        id,
+        result: Some(result),
+        error: None,
+    }
 }
 pub fn err(id: J, code: i32, msg: impl Into<String>, data: Option<J>) -> RpcResp {
-    RpcResp { jsonrpc: "2.0", id, result: None, error: Some(RpcErr { code, message: msg.into(), data }) }
+    RpcResp {
+        jsonrpc: "2.0",
+        id,
+        result: None,
+        error: Some(RpcErr {
+            code,
+            message: msg.into(),
+            data,
+        }),
+    }
 }
 
 // --- Minimal Initialize result for tests/docs ---
@@ -58,10 +72,13 @@ mod tests {
 
     #[test]
     fn it_serializes_initialize_result() {
-        let v = InitializeResult { server_info: ServerInfo { name: "gw".into(), version: "0.1".into() } };
+        let v = InitializeResult {
+            server_info: ServerInfo {
+                name: "gw".into(),
+                version: "0.1".into(),
+            },
+        };
         let s = serde_json::to_string(&v).unwrap();
         assert!(s.contains("server_info"));
     }
 }
-
-

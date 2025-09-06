@@ -23,5 +23,3 @@ mod tests {
         assert_eq!(e.to_string(), "boom");
     }
 }
-
-

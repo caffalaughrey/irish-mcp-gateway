@@ -1,6 +1,4 @@
-pub mod remote;
 pub mod local;
-pub use remote::SpellcheckRemoteBackend;
+pub mod remote;
 pub use local::SpellcheckLocalBackend;
-
-
+pub use remote::SpellcheckRemoteBackend;

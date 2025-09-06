@@ -6,8 +6,12 @@ use crate::core::tool::{Tool, ToolSpec};
 pub struct SpellcheckLocalBackend;
 
 impl ToolSpec for SpellcheckLocalBackend {
-    fn name(&self) -> &'static str { "gael.spellcheck.v1" }
-    fn description(&self) -> &'static str { "Irish spellcheck (local placeholder)" }
+    fn name(&self) -> &'static str {
+        "gael.spellcheck.v1"
+    }
+    fn description(&self) -> &'static str {
+        "Irish spellcheck (local placeholder)"
+    }
     fn input_schema(&self) -> serde_json::Value {
         serde_json::json!({"type":"object","properties":{"text":{"type":"string"}},"required":["text"]})
     }
@@ -16,7 +20,10 @@ impl ToolSpec for SpellcheckLocalBackend {
 #[async_trait]
 impl Tool for SpellcheckLocalBackend {
     async fn call(&self, args: &serde_json::Value) -> Result<serde_json::Value, String> {
-        let _ = args.get("text").and_then(|v| v.as_str()).ok_or("missing 'text'")?;
+        let _ = args
+            .get("text")
+            .and_then(|v| v.as_str())
+            .ok_or("missing 'text'")?;
         Ok(serde_json::json!({"corrections": []}))
     }
 }

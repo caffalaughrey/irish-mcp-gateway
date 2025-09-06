@@ -9,7 +9,9 @@ pub struct InMemorySessionStore {
 }
 
 impl InMemorySessionStore {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn get(&self, key: &str) -> Option<serde_json::Value> {
         self.inner.lock().unwrap().get(key).cloned()
@@ -38,5 +40,3 @@ mod tests {
         assert!(store.get("s1").is_none());
     }
 }
-
-

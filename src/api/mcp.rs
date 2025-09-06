@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as J};
 use std::io::{self, BufRead, Write};
 
-use crate::core::mcp::{RpcErr, RpcReq, RpcResp};
 use crate::core::mcp::{err as rpc_err, ok as rpc_ok};
+use crate::core::mcp::{RpcErr, RpcReq, RpcResp};
 use crate::infra::http::json as http_json;
 
 fn tools_list(reg: &Registry) -> J {

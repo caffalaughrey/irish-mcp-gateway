@@ -1,10 +1,10 @@
 mod api;
 mod cli;
 mod clients;
+mod core;
 mod domain;
 mod infra;
 mod tools;
-mod core;
 
 use infra::config::Config;
 use std::net::SocketAddr;
@@ -34,7 +34,9 @@ async fn main() -> anyhow::Result<()> {
     if cfg.mode == "stdio" {
         let factory = || {
             let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
-            let handler = crate::tools::grammar::tool_router::GrammarSvc { checker: crate::clients::gramadoir::GramadoirRemote::new(base) };
+            let handler = crate::tools::grammar::tool_router::GrammarSvc {
+                checker: crate::clients::gramadoir::GramadoirRemote::new(base),
+            };
             let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
             (handler, tools)
         };

@@ -27,8 +27,11 @@ async fn v2_initialize_list_and_call_using_pure_transport_and_tool_router() {
     let factory = {
         let base = server.base_url();
         move || {
-            let svc = irish_mcp_gateway::tools::grammar::tool_router::GrammarSvc { checker: irish_mcp_gateway::clients::gramadoir::GramadoirRemote::new(base.clone()) };
-            let tools: irish_mcp_gateway::tools::grammar::tool_router::GrammarRouter = irish_mcp_gateway::tools::grammar::tool_router::GrammarSvc::router();
+            let svc = irish_mcp_gateway::tools::grammar::tool_router::GrammarSvc {
+                checker: irish_mcp_gateway::clients::gramadoir::GramadoirRemote::new(base.clone()),
+            };
+            let tools: irish_mcp_gateway::tools::grammar::tool_router::GrammarRouter =
+                irish_mcp_gateway::tools::grammar::tool_router::GrammarSvc::router();
             (svc, tools)
         }
     };
@@ -61,7 +64,8 @@ async fn v2_initialize_list_and_call_using_pure_transport_and_tool_router() {
         .to_owned();
 
     // notifications/initialized
-    let initialized_notif = json!({"jsonrpc":"2.0","method":"notifications/initialized","params":{}});
+    let initialized_notif =
+        json!({"jsonrpc":"2.0","method":"notifications/initialized","params":{}});
     let initialized_req = Request::builder()
         .method("POST")
         .uri("/mcp")
@@ -76,12 +80,17 @@ async fn v2_initialize_list_and_call_using_pure_transport_and_tool_router() {
     // tools/list
     let list = json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}});
     let list_req = Request::builder()
-        .method("POST").uri("/mcp")
+        .method("POST")
+        .uri("/mcp")
         .header(header::ACCEPT, "application/json, text/event-stream")
         .header(header::CONTENT_TYPE, "application/json")
         .header("MCP-Session-Id", session_id.clone())
-        .body(axum::body::Body::from(list.to_string())).unwrap();
-    let list_res = timeout(Duration::from_secs(20), app.clone().oneshot(list_req)).await.unwrap().unwrap();
+        .body(axum::body::Body::from(list.to_string()))
+        .unwrap();
+    let list_res = timeout(Duration::from_secs(20), app.clone().oneshot(list_req))
+        .await
+        .unwrap()
+        .unwrap();
     assert!(list_res.status().is_success());
 
     // tools/call
@@ -90,11 +99,13 @@ async fn v2_initialize_list_and_call_using_pure_transport_and_tool_router() {
         "params": {"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}
     });
     let call_req = Request::builder()
-        .method("POST").uri("/mcp")
+        .method("POST")
+        .uri("/mcp")
         .header(header::ACCEPT, "application/json, text/event-stream")
         .header(header::CONTENT_TYPE, "application/json")
         .header("MCP-Session-Id", session_id.clone())
-        .body(axum::body::Body::from(call.to_string())).unwrap();
+        .body(axum::body::Body::from(call.to_string()))
+        .unwrap();
     let call_res = app.clone().oneshot(call_req).await.unwrap();
     assert!(call_res.status().is_success());
     let bytes = call_res.into_body().collect().await.unwrap().to_bytes();
@@ -106,5 +117,3 @@ async fn v2_initialize_list_and_call_using_pure_transport_and_tool_router() {
         .expect("Did not find an rpcResponse for tools/call");
     assert!(v["result"]["structuredContent"]["issues"].is_array());
 }
-
-

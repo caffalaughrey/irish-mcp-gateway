@@ -43,11 +43,14 @@ mod tests {
             calls += 1;
             let c = calls;
             async move {
-                if c < 3 { Err(-1) } else { Ok(42) }
+                if c < 3 {
+                    Err(-1)
+                } else {
+                    Ok(42)
+                }
             }
-        }).await;
+        })
+        .await;
         assert_eq!(res.unwrap(), 42);
     }
 }
-
-

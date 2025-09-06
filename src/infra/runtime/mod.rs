@@ -1,6 +1,6 @@
-pub mod session;
 pub mod limits;
 pub mod mcp_transport;
+pub mod session;
 
 #[cfg(test)]
 mod tests {
@@ -9,5 +9,3 @@ mod tests {
         assert!(true);
     }
 }
-
-

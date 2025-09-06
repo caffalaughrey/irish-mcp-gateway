@@ -26,9 +26,15 @@ mod tests {
     struct Echo;
 
     impl ToolSpec for Echo {
-        fn name(&self) -> &'static str { "test.echo" }
-        fn description(&self) -> &'static str { "echo tool" }
-        fn input_schema(&self) -> serde_json::Value { serde_json::json!({"type":"object"}) }
+        fn name(&self) -> &'static str {
+            "test.echo"
+        }
+        fn description(&self) -> &'static str {
+            "echo tool"
+        }
+        fn input_schema(&self) -> serde_json::Value {
+            serde_json::json!({"type":"object"})
+        }
     }
 
     #[async_trait]
@@ -45,5 +51,3 @@ mod tests {
         assert_eq!(out["x"], 1);
     }
 }
-
-

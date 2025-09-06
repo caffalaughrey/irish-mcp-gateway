@@ -1,9 +1,9 @@
 //! Core types & traits: domain-agnostic contracts for tools and protocol.
 
-pub mod error;
-pub mod tool;
 pub mod content;
+pub mod error;
 pub mod mcp;
+pub mod tool;
 
 #[cfg(test)]
 mod tests {
@@ -15,5 +15,3 @@ mod tests {
         let _ = ();
     }
 }
-
-

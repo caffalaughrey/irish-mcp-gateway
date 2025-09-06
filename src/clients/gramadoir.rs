@@ -42,7 +42,9 @@ impl GramadoirRemote {
                     }
                     return Err(format!("upstream status {}", resp.status()));
                 }
-                resp.json::<Vec<IssueWire>>().await.map_err(|e| e.to_string())
+                resp.json::<Vec<IssueWire>>()
+                    .await
+                    .map_err(|e| e.to_string())
             }
         })
         .await?;

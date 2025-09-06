@@ -82,7 +82,7 @@ mod tests {
         let checker = GramadoirRemote::new("http://test".to_string());
         let svc = GrammarSvc { checker };
         let params = Parameters(json!({}).as_object().unwrap().clone());
-        
+
         let result = svc.gael_grammar_check(params).await;
         assert!(result.is_err());
         if let Err(err) = result {
@@ -95,7 +95,7 @@ mod tests {
         let checker = GramadoirRemote::new("http://test".to_string());
         let svc = GrammarSvc { checker };
         let params = Parameters(json!({"text": 123}).as_object().unwrap().clone());
-        
+
         let result = svc.gael_grammar_check(params).await;
         assert!(result.is_err());
         if let Err(err) = result {
@@ -108,7 +108,7 @@ mod tests {
         let checker = GramadoirRemote::new("http://test".to_string());
         let svc = GrammarSvc { checker };
         let params = Parameters(json!({"text": "test text"}).as_object().unwrap().clone());
-        
+
         // This will fail because the checker will try to make an HTTP request
         // but we're testing the parameter validation path
         let result = svc.gael_grammar_check(params).await;
@@ -126,11 +126,9 @@ mod tests {
     fn test_server_handler_trait_impl() {
         let checker = GramadoirRemote::new("http://test".to_string());
         let svc = GrammarSvc { checker };
-        
+
         // Test that GrammarSvc implements ServerHandler
         fn assert_server_handler<T: ServerHandler>(_handler: T) {}
         assert_server_handler(svc);
     }
 }
-
-

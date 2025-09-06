@@ -8,12 +8,20 @@ pub struct SpellcheckRemoteBackend {
 }
 
 impl SpellcheckRemoteBackend {
-    pub fn new(base_url: impl Into<String>) -> Self { Self { base_url: base_url.into() } }
+    pub fn new(base_url: impl Into<String>) -> Self {
+        Self {
+            base_url: base_url.into(),
+        }
+    }
 }
 
 impl ToolSpec for SpellcheckRemoteBackend {
-    fn name(&self) -> &'static str { "gael.spellcheck.v1" }
-    fn description(&self) -> &'static str { "Irish spellcheck (remote backend placeholder)" }
+    fn name(&self) -> &'static str {
+        "gael.spellcheck.v1"
+    }
+    fn description(&self) -> &'static str {
+        "Irish spellcheck (remote backend placeholder)"
+    }
     fn input_schema(&self) -> serde_json::Value {
         serde_json::json!({"type":"object","properties":{"text":{"type":"string"}},"required":["text"]})
     }
@@ -22,7 +30,10 @@ impl ToolSpec for SpellcheckRemoteBackend {
 #[async_trait]
 impl Tool for SpellcheckRemoteBackend {
     async fn call(&self, args: &serde_json::Value) -> Result<serde_json::Value, String> {
-        let _ = args.get("text").and_then(|v| v.as_str()).ok_or("missing 'text'")?;
+        let _ = args
+            .get("text")
+            .and_then(|v| v.as_str())
+            .ok_or("missing 'text'")?;
         // Placeholder: just echo empty corrections for now
         Ok(serde_json::json!({"corrections": []}))
     }
@@ -39,5 +50,3 @@ mod tests {
         assert!(out["corrections"].as_array().unwrap().is_empty());
     }
 }
-
-

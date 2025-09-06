@@ -12,7 +12,14 @@ pub fn error(id: serde_json::Value, code: i32, message: impl Into<String>) -> Js
 }
 
 pub fn parse_error(message: impl Into<String>) -> Json<RpcResp> {
-    Json(RpcResp { jsonrpc: "2.0", id: serde_json::Value::Null, result: None, error: Some(RpcErr { code: -32700, message: message.into(), data: None }) })
+    Json(RpcResp {
+        jsonrpc: "2.0",
+        id: serde_json::Value::Null,
+        result: None,
+        error: Some(RpcErr {
+            code: -32700,
+            message: message.into(),
+            data: None,
+        }),
+    })
 }
-
-

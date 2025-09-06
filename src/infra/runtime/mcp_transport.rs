@@ -5,7 +5,9 @@ use std::sync::Arc;
 use rmcp::handler::server::router::Router;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::serve_server;
-use rmcp::transport::streamable_http_server::tower::{StreamableHttpServerConfig, StreamableHttpService};
+use rmcp::transport::streamable_http_server::tower::{
+    StreamableHttpServerConfig, StreamableHttpService,
+};
 
 pub use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 pub use rmcp::ServerHandler;
@@ -43,9 +45,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
-    use crate::tools::grammar::tool_router::GrammarSvc;
     use crate::clients::gramadoir::GramadoirRemote;
+    use crate::tools::grammar::tool_router::GrammarSvc;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_make_streamable_http_service() {
@@ -56,7 +58,7 @@ mod tests {
             let tools = GrammarSvc::router();
             (handler, tools)
         };
-        
+
         let _service = make_streamable_http_service(factory, session_mgr);
         // Test that we can create the service without errors
         assert!(true);
@@ -71,7 +73,7 @@ mod tests {
             let tools = GrammarSvc::router();
             (handler, tools)
         };
-        
+
         let _service = make_streamable_http_service(factory, session_mgr);
         // Test that we can create the service without errors
         assert!(true);
@@ -85,11 +87,9 @@ mod tests {
             let tools = GrammarSvc::router();
             (handler, tools)
         };
-        
+
         // Test that factory can be called (we can't easily test the full stdio flow)
         let (_, _) = factory();
         assert!(true);
     }
 }
-
-

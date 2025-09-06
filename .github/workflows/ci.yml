@@ -75,11 +75,11 @@ jobs:
         continue-on-error: true
 
       - name: Coverage (lcov)
-        run: cargo llvm-cov --workspace --lcov --output-path lcov.info --exclude-files "main.rs"
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
         continue-on-error: true
 
       - name: Coverage (html)
-        run: cargo llvm-cov --workspace --html --output-path coverage/html --exclude-files "main.rs"
+        run: cargo llvm-cov --workspace --html --output-path coverage/html
         continue-on-error: true
 
       - name: Upload coverage artifacts

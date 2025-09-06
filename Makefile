@@ -27,11 +27,11 @@ test:
 	cargo test --all-features --all-targets --no-fail-fast
 
 test-coverage:
-	cargo llvm-cov --workspace --lcov --output-path lcov.info --exclude-files "main.rs"
-	cargo llvm-cov report --exclude-files "main.rs"
+	cargo llvm-cov --workspace --lcov --output-path lcov.info
+	cargo llvm-cov report
 
 test-coverage-html:
-	cargo llvm-cov --workspace --html --output-path coverage/html --exclude-files "main.rs"
+	cargo llvm-cov --workspace --html --output-path coverage/html
 
 # push:
 # 	docker push $(REGISTRY)/$(APP):dev

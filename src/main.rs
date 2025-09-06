@@ -3,6 +3,7 @@ mod clients;
 mod domain;
 mod infra;
 mod tools;
+mod core;
 
 use infra::config::Config;
 use std::net::SocketAddr;

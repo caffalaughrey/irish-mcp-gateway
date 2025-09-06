@@ -7,7 +7,12 @@ pub trait ToolSpec {
     fn input_schema(&self) -> serde_json::Value;
 }
 
-// ToolBackend trait - placeholder for future backend abstraction
+/// Backend abstraction so a tool can be local or remote.
+#[allow(dead_code)]
+#[async_trait]
+pub trait ToolBackend: Send + Sync {
+    async fn call(&self, arguments: &serde_json::Value) -> Result<serde_json::Value, String>;
+}
 
 /// Tool = Spec + Backend implementation
 #[async_trait]

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::core::tool::{Tool, ToolSpec};
+use crate::tools::grammar_new::{GrammarLocalBackend, GrammarRemoteBackend};
 
 #[derive(Clone)]
 pub struct ToolRegistry {
@@ -58,6 +59,21 @@ pub struct ToolMeta {
     pub input_schema: serde_json::Value,
 }
 
+/// Build a registry v2 from environment, selecting grammar backend.
+pub fn build_registry_v2_from_env() -> ToolRegistry {
+    let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
+    if let Ok(base) = std::env::var("GRAMADOIR_BASE_URL") {
+        if !base.trim().is_empty() {
+            map.insert("gael.grammar_check.v2", Arc::new(GrammarRemoteBackend::new(base)));
+        } else {
+            map.insert("gael.grammar_check.v2", Arc::new(GrammarLocalBackend::default()));
+        }
+    } else {
+        map.insert("gael.grammar_check.v2", Arc::new(GrammarLocalBackend::default()));
+    }
+    ToolRegistry { by_name: Arc::new(map) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +103,16 @@ mod tests {
         assert_eq!(metas[0].name, "test.echo2");
         let out = reg.call("test.echo2", &serde_json::json!({"x": 2})).await.unwrap();
         assert_eq!(out["x"], 2);
+    }
+
+    #[tokio::test]
+    async fn registry_v2_builds_with_local_fallback() {
+        std::env::remove_var("GRAMADOIR_BASE_URL");
+        let reg = build_registry_v2_from_env();
+        let metas = reg.list();
+        assert!(metas.iter().any(|m| m.name == "gael.grammar_check.v2"));
+        let out = reg.call("gael.grammar_check.v2", &serde_json::json!({"text":"x"})).await.unwrap();
+        assert!(out["issues"].is_array());
     }
 }
 

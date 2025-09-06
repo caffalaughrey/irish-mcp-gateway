@@ -43,11 +43,7 @@ impl Tool for GrammarTool {
         let Some(text) = arguments.get("text").and_then(|v| v.as_str()) else {
             return Err("missing 'text'".to_string());
         };
-        let issues = self
-            .client
-            .analyze(text)
-            .await
-            .map_err(|e| e.to_string())?;
+        let issues = self.client.analyze(text).await.map_err(|e| e.to_string())?;
         Ok(json!({ "issues": issues }))
     }
 }

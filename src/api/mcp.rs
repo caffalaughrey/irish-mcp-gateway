@@ -4,53 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as J};
 use std::io::{self, BufRead, Write};
 
-#[derive(Deserialize, Debug)]
-pub struct RpcReq {
-    #[allow(dead_code)]
-    pub jsonrpc: String,
-    pub id: J,
-    pub method: String,
-    #[serde(default)]
-    pub params: J,
-}
-
-#[derive(Serialize, Debug)]
-pub struct RpcResp {
-    pub jsonrpc: &'static str,
-    pub id: J,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<J>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<RpcErr>,
-}
-#[derive(Serialize, Debug)]
-pub struct RpcErr {
-    pub code: i32,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<J>,
-}
-
-fn ok(id: J, result: J) -> RpcResp {
-    RpcResp {
-        jsonrpc: "2.0",
-        id,
-        result: Some(result),
-        error: None,
-    }
-}
-fn err(id: J, code: i32, msg: impl Into<String>, data: Option<J>) -> RpcResp {
-    RpcResp {
-        jsonrpc: "2.0",
-        id,
-        result: None,
-        error: Some(RpcErr {
-            code,
-            message: msg.into(),
-            data,
-        }),
-    }
-}
+use crate::core::mcp::{RpcErr, RpcReq, RpcResp};
+use crate::core::mcp::{err as rpc_err, ok as rpc_ok};
+use crate::infra::http::json as http_json;
 
 fn tools_list(reg: &Registry) -> J {
     let tools: Vec<J> = reg.0.values().map(|t| {
@@ -80,34 +36,29 @@ pub async fn http(
     tracing::debug!(method = %req.method, id = ?req.id, "HTTP handler invoked");
     let id = req.id.clone();
     let resp = match req.method.as_str() {
-        "initialize" => ok(
+        "initialize" => http_json::ok(
             id.clone(),
             json!({ "serverInfo": { "name": "irish-mcp-gateway", "version": "0.1.0" }, "capabilities": {} }),
-        ),
-        "shutdown" => ok(id.clone(), J::Null),
+        ).0,
+        "shutdown" => http_json::ok(id.clone(), J::Null).0,
         "tools.list" | "tools/list" => {
-            let resp = ok(id.clone(), tools_list(&reg));
+            let resp = http_json::ok(id.clone(), tools_list(&reg)).0;
             tracing::trace!(response = ?resp, "tools.list response");
             resp
         }
         "tools.call" | "tools/call" => match call_tool(&reg, &req.params).await {
             Ok(out) => {
-                let resp = ok(id.clone(), out);
+                let resp = http_json::ok(id.clone(), out).0;
                 tracing::trace!(response = ?resp, "tools.call ok response");
                 resp
             }
             Err(e) => {
-                let resp = err(id.clone(), -32000, e, None);
+                let resp = http_json::error(id.clone(), -32000, e).0;
                 tracing::warn!(response = ?resp, "tools.call error response");
                 resp
             }
         },
-        _ => err(
-            id.clone(),
-            -32601,
-            format!("unknown method: {}", req.method),
-            None,
-        ),
+        _ => http_json::error(id.clone(), -32601, format!("unknown method: {}", req.method)).0,
     };
     tracing::debug!(response = ?resp, "HTTP handler completed");
     Json(resp)
@@ -132,28 +83,19 @@ pub async fn stdio_loop(reg: Registry) -> anyhow::Result<()> {
             Ok(r) => {
                 let id = r.id.clone();
                 match r.method.as_str() {
-                    "tools.list" | "tools/list" => ok(id, tools_list(&reg)),
-                    "initialize" => ok(
+                    "tools.list" | "tools/list" => rpc_ok(id, tools_list(&reg)),
+                    "initialize" => rpc_ok(
                         id,
                         json!({ "serverInfo": { "name": "irish-mcp-gateway", "version": "0.1.0" }, "capabilities": {} }),
                     ),
                     "tools.call" | "tools/call" => match call_tool(&reg, &r.params).await {
-                        Ok(out) => ok(id, out),
-                        Err(e) => err(id, -32000, e, None),
+                        Ok(out) => rpc_ok(id, out),
+                        Err(e) => rpc_err(id, -32000, e, None),
                     },
-                    _ => err(id, -32601, format!("unknown method: {}", r.method), None),
+                    _ => rpc_err(id, -32601, format!("unknown method: {}", r.method), None),
                 }
             }
-            Err(e) => RpcResp {
-                jsonrpc: "2.0",
-                id: J::Null,
-                result: None,
-                error: Some(RpcErr {
-                    code: -32700,
-                    message: format!("parse error: {e}"),
-                    data: None,
-                }),
-            },
+            Err(e) => http_json::parse_error(format!("parse error: {e}")).0,
         };
 
         let s = serde_json::to_string(&resp)?;

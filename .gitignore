@@ -25,5 +25,6 @@ target
 # Ignore stray demos and notes
 streaming_with_rmcp_tools.rs
 rmcp-findings.md
+refactor-plan.md
 
 integration-test-findings.md

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::core::tool::{Tool, ToolSpec};
 use crate::tools::grammar_new::{GrammarLocalBackend, GrammarRemoteBackend};
+use crate::tools::spellcheck::{SpellcheckLocalBackend};
 
 #[derive(Clone)]
 pub struct ToolRegistry {
@@ -62,6 +63,8 @@ pub struct ToolMeta {
 /// Build a registry v2 from environment, selecting grammar backend.
 pub fn build_registry_v2_from_env() -> ToolRegistry {
     let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
+    // Always include spellcheck placeholder (local).
+    map.insert("gael.spellcheck.v1", Arc::new(SpellcheckLocalBackend::default()));
     if let Ok(base) = std::env::var("GRAMADOIR_BASE_URL") {
         if !base.trim().is_empty() {
             map.insert("gael.grammar_check.v2", Arc::new(GrammarRemoteBackend::new(base)));

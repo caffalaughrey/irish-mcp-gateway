@@ -5,7 +5,8 @@ use axum::{
 use std::sync::Arc;
 
 use crate::infra::mcp;
-use crate::tools::registry::Registry;
+use crate::api::mcp2;
+use crate::tools::registry2::ToolRegistry as ToolRegistryV2;
 
 /// Default, spec-compliant app: `/healthz` + streamable MCP at `/mcp`.
 pub fn build_app_default() -> Router {
@@ -20,7 +21,7 @@ pub fn build_app_default() -> Router {
 }
 
 /// Spec app **plus** deprecated demo REST route at `/v1/grammar/check`.
-pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
+pub fn build_app_with_deprecated_api(registry: ToolRegistryV2) -> Router {
     let session_mgr = Arc::new(
         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
     );
@@ -29,7 +30,7 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route_service("/mcp", any_service(mcp_service))
-        .route("/v1/grammar/check", post(crate::api::mcp::http))
+        .route("/v1/grammar/check", post(mcp2::http))
         .with_state(registry)
 }
 
@@ -53,12 +54,11 @@ mod tests {
 
     #[tokio::test]
     async fn deprecated_route_handles_grammar_check_when_configured() {
-        // Configure env so registry includes grammar tool
-        std::env::set_var("GRAMADOIR_BASE_URL", "http://example");
-        let reg = crate::tools::registry::build_registry();
+        // Use v2 registry and call spellcheck placeholder to avoid external dependency
+        let reg = crate::tools::registry2::build_registry_v2_from_env();
         let app = build_app_with_deprecated_api(reg);
 
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
         let req = Request::builder()
             .method("POST")
             .uri("/v1/grammar/check")

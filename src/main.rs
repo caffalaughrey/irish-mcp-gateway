@@ -30,12 +30,11 @@ async fn main() -> anyhow::Result<()> {
 
     // HTTP server
     let app = if cfg.deprecate_rest {
-        // Spec-only: /healthz + streamable HTTP MCP on /mcp
         infra::http_app::build_app_default()
     } else {
-        // Spec + demo REST: add /v1/grammar/check
-        let registry = tools::registry::build_registry();
-        infra::http_app::build_app_with_deprecated_api(registry)
+        // Use new registry v2 for deprecated REST path
+        let registry_v2 = tools::registry2::build_registry_v2_from_env();
+        infra::http_app::build_app_with_deprecated_api(registry_v2)
     };
 
     let addr: SocketAddr = ([0, 0, 0, 0], cfg.port).into();

@@ -6,8 +6,6 @@ mod domain;
 mod infra;
 mod tools;
 
- 
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     infra::logging::init();

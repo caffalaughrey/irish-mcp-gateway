@@ -48,5 +48,3 @@ mod tests {
         assert_eq!(cfg.mode, "server");
     }
 }
-
-

@@ -55,9 +55,15 @@ mod tests {
     struct Failing;
 
     impl ToolSpec for Failing {
-        fn name(&self) -> &'static str { "test.failing" }
-        fn description(&self) -> &'static str { "failing tool" }
-        fn input_schema(&self) -> serde_json::Value { serde_json::json!({"type":"object"}) }
+        fn name(&self) -> &'static str {
+            "test.failing"
+        }
+        fn description(&self) -> &'static str {
+            "failing tool"
+        }
+        fn input_schema(&self) -> serde_json::Value {
+            serde_json::json!({"type":"object"})
+        }
     }
 
     #[async_trait]

@@ -86,7 +86,6 @@ mod tests {
         };
         let _service = make_streamable_http_service(factory, session_mgr.clone());
         // If session manager type mismatched, this would not compile; runtime test is smoke only.
-        assert!(true);
     }
 
     #[test]

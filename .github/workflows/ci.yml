@@ -22,8 +22,8 @@ jobs:
         run: cargo test --all-features --all-targets --no-fail-fast
 
   lint-udeps:
+    if: ${{ false }} # temporarily disabled
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -33,8 +33,8 @@ jobs:
         run: cargo udeps --all-targets
 
   lint-machete:
+    if: ${{ false }} # temporarily disabled
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

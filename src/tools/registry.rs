@@ -1,6 +1,5 @@
-use super::grammar::GrammarTool;
-use super::hello::HelloTool;
-use crate::domain::Tool;
+use crate::core::tool::Tool;
+use crate::tools::spellcheck::{SpellcheckLocalBackend, SpellcheckRemoteBackend};
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone)]
@@ -9,15 +8,15 @@ pub struct Registry(pub Arc<HashMap<&'static str, Arc<dyn Tool>>>);
 pub fn build_registry() -> Registry {
     let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
 
-    // Always provide hello
-    let hello: Arc<dyn Tool> = Arc::new(HelloTool);
-    map.insert(hello.name(), hello);
+    // Always include spellcheck placeholder (local)
+    let spellcheck: Arc<dyn Tool> = Arc::new(SpellcheckLocalBackend);
+    map.insert("gael.spellcheck.v1", spellcheck);
 
-    // Conditionally include Gramadóir (avoid breaking existing flows if not configured)
-    if let Ok(base) = std::env::var("GRAMADOIR_BASE_URL") {
+    // Conditionally include remote spellcheck if configured
+    if let Ok(base) = std::env::var("SPELLCHECK_BASE_URL") {
         if !base.trim().is_empty() {
-            let grammar: Arc<dyn Tool> = Arc::new(GrammarTool::new(base));
-            map.insert(grammar.name(), grammar);
+            let remote_spellcheck: Arc<dyn Tool> = Arc::new(SpellcheckRemoteBackend::new(base));
+            map.insert("gael.spellcheck.v1", remote_spellcheck);
         }
     }
 
@@ -29,10 +28,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_includes_grammar_when_configured() {
-        std::env::set_var("GRAMADOIR_BASE_URL", "http://example");
+    fn it_includes_spellcheck_when_configured() {
+        std::env::set_var("SPELLCHECK_BASE_URL", "http://example");
         let reg = build_registry();
-        assert!(reg.0.contains_key("gael.grammar_check"));
-        std::env::remove_var("GRAMADOIR_BASE_URL");
+        assert!(reg.0.contains_key("gael.spellcheck.v1"));
+        std::env::remove_var("SPELLCHECK_BASE_URL");
     }
 }

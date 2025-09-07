@@ -1,8 +1,8 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 use crate::domain::GrammarIssue;
+use crate::infra::runtime::limits::{make_http_client, retry_async};
 
 #[derive(Clone)]
 pub struct GramadoirRemote {
@@ -12,11 +12,7 @@ pub struct GramadoirRemote {
 
 impl GramadoirRemote {
     pub fn new(base: impl Into<String>) -> Self {
-        let http = Client::builder()
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(6))
-            .build()
-            .expect("reqwest client");
+        let http = make_http_client();
         Self {
             base: base.into(),
             http,
@@ -25,34 +21,38 @@ impl GramadoirRemote {
 
     pub async fn analyze(&self, text: &str) -> Result<Vec<GrammarIssue>, String> {
         let url = format!("{}/api/gramadoir/1.0", self.base.trim_end_matches('/'));
-        let resp = self
-            .http
-            .post(url)
-            .json(&TeacsReq { teacs: text })
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let http = self.http.clone();
+        let url_clone = url.clone();
+        tracing::debug!(endpoint = %url, "gramadoir.analyze request");
+        let issues: Vec<IssueWire> = retry_async(2, move |_| {
+            let http = http.clone();
+            let url = url_clone.clone();
+            let payload = TeacsReq { teacs: text };
+            async move {
+                let resp = http
+                    .post(url)
+                    .json(&payload)
+                    .send()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if !resp.status().is_success() {
+                    if resp.status().is_server_error() {
+                        return Err(format!("retryable status {}", resp.status()));
+                    }
+                    return Err(format!("upstream status {}", resp.status()));
+                }
+                resp.json::<Vec<IssueWire>>()
+                    .await
+                    .map_err(|e| e.to_string())
+            }
+        })
+        .await?;
 
-        if !resp.status().is_success() {
-            return Err(format!("upstream status {}", resp.status()));
-        }
-        // Upstream returns a top-level array
-        let body: Vec<IssueWire> = resp.json().await.map_err(|e| e.to_string())?;
-        Ok(body.into_iter().map(GrammarIssue::from).collect())
+        Ok(issues.into_iter().map(GrammarIssue::from).collect())
     }
 }
 
-#[async_trait::async_trait]
-impl crate::infra::mcp::GrammarCheck for GramadoirRemote {
-    async fn check_as_json(
-        &self,
-        text: &str,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-        // Reuse existing typed call and wrap it as JSON for MCP.
-        let issues = self.analyze(text).await.map_err(std::io::Error::other)?;
-        Ok(serde_json::json!({ "issues": issues }))
-    }
-}
+// Deprecated adapter removed: GramadoirRemote is used directly by the grammar tool router now.
 
 #[derive(Serialize, Deserialize)]
 struct TeacsReq<'a> {

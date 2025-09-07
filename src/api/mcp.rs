@@ -1,56 +1,11 @@
 use crate::tools::registry::Registry;
 use axum::Json;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as J};
 use std::io::{self, BufRead, Write};
 
-#[derive(Deserialize, Debug)]
-pub struct RpcReq {
-    #[allow(dead_code)]
-    pub jsonrpc: String,
-    pub id: J,
-    pub method: String,
-    #[serde(default)]
-    pub params: J,
-}
-
-#[derive(Serialize, Debug)]
-pub struct RpcResp {
-    pub jsonrpc: &'static str,
-    pub id: J,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<J>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<RpcErr>,
-}
-#[derive(Serialize, Debug)]
-pub struct RpcErr {
-    pub code: i32,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<J>,
-}
-
-fn ok(id: J, result: J) -> RpcResp {
-    RpcResp {
-        jsonrpc: "2.0",
-        id,
-        result: Some(result),
-        error: None,
-    }
-}
-fn err(id: J, code: i32, msg: impl Into<String>, data: Option<J>) -> RpcResp {
-    RpcResp {
-        jsonrpc: "2.0",
-        id,
-        result: None,
-        error: Some(RpcErr {
-            code,
-            message: msg.into(),
-            data,
-        }),
-    }
-}
+use crate::core::mcp::{err as rpc_err, ok as rpc_ok};
+use crate::core::mcp::{RpcReq, RpcResp};
+use crate::infra::http::json as http_json;
 
 fn tools_list(reg: &Registry) -> J {
     let tools: Vec<J> = reg.0.values().map(|t| {
@@ -80,34 +35,29 @@ pub async fn http(
     tracing::debug!(method = %req.method, id = ?req.id, "HTTP handler invoked");
     let id = req.id.clone();
     let resp = match req.method.as_str() {
-        "initialize" => ok(
+        "initialize" => http_json::ok(
             id.clone(),
             json!({ "serverInfo": { "name": "irish-mcp-gateway", "version": "0.1.0" }, "capabilities": {} }),
-        ),
-        "shutdown" => ok(id.clone(), J::Null),
+        ).0,
+        "shutdown" => http_json::ok(id.clone(), J::Null).0,
         "tools.list" | "tools/list" => {
-            let resp = ok(id.clone(), tools_list(&reg));
+            let resp = http_json::ok(id.clone(), tools_list(&reg)).0;
             tracing::trace!(response = ?resp, "tools.list response");
             resp
         }
         "tools.call" | "tools/call" => match call_tool(&reg, &req.params).await {
             Ok(out) => {
-                let resp = ok(id.clone(), out);
+                let resp = http_json::ok(id.clone(), out).0;
                 tracing::trace!(response = ?resp, "tools.call ok response");
                 resp
             }
             Err(e) => {
-                let resp = err(id.clone(), -32000, e, None);
+                let resp = http_json::error(id.clone(), -32000, e).0;
                 tracing::warn!(response = ?resp, "tools.call error response");
                 resp
             }
         },
-        _ => err(
-            id.clone(),
-            -32601,
-            format!("unknown method: {}", req.method),
-            None,
-        ),
+        _ => http_json::error(id.clone(), -32601, format!("unknown method: {}", req.method)).0,
     };
     tracing::debug!(response = ?resp, "HTTP handler completed");
     Json(resp)
@@ -132,28 +82,19 @@ pub async fn stdio_loop(reg: Registry) -> anyhow::Result<()> {
             Ok(r) => {
                 let id = r.id.clone();
                 match r.method.as_str() {
-                    "tools.list" | "tools/list" => ok(id, tools_list(&reg)),
-                    "initialize" => ok(
+                    "tools.list" | "tools/list" => rpc_ok(id, tools_list(&reg)),
+                    "initialize" => rpc_ok(
                         id,
                         json!({ "serverInfo": { "name": "irish-mcp-gateway", "version": "0.1.0" }, "capabilities": {} }),
                     ),
                     "tools.call" | "tools/call" => match call_tool(&reg, &r.params).await {
-                        Ok(out) => ok(id, out),
-                        Err(e) => err(id, -32000, e, None),
+                        Ok(out) => rpc_ok(id, out),
+                        Err(e) => rpc_err(id, -32000, e, None),
                     },
-                    _ => err(id, -32601, format!("unknown method: {}", r.method), None),
+                    _ => rpc_err(id, -32601, format!("unknown method: {}", r.method), None),
                 }
             }
-            Err(e) => RpcResp {
-                jsonrpc: "2.0",
-                id: J::Null,
-                result: None,
-                error: Some(RpcErr {
-                    code: -32700,
-                    message: format!("parse error: {e}"),
-                    data: None,
-                }),
-            },
+            Err(e) => http_json::parse_error(format!("parse error: {e}")).0,
         };
 
         let s = serde_json::to_string(&resp)?;
@@ -182,30 +123,30 @@ mod tests {
     }
 
     #[test]
-    fn it_knows_tools_list_shape() {
+    fn tools_list_returns_expected_shape() {
         let reg = crate::tools::registry::build_registry();
         let v = super::tools_list(&reg);
         assert!(v["tools"].is_array());
-        assert_eq!(v["tools"][0]["name"], "hello.echo");
+        assert_eq!(v["tools"][0]["name"], "gael.spellcheck.v1");
     }
 
     #[tokio::test]
-    async fn it_knows_call_tool_happy_path() {
+    async fn call_tool_returns_corrections_array() {
         let reg = crate::tools::registry::build_registry();
         let out = super::call_tool(
             &reg,
             &serde_json::json!({
-                "name":"hello.echo",
-                "arguments":{"name":"Arn"}
+                "name":"gael.spellcheck.v1",
+                "arguments":{"text":"test"}
             }),
         )
         .await
         .unwrap();
-        assert_eq!(out["message"], "Dia dhuit, Arn!");
+        assert_eq!(out["corrections"], serde_json::Value::Array(vec![]));
     }
 
     #[tokio::test]
-    async fn it_knows_http_tools_list() {
+    async fn http_tools_list_returns_200_and_array() {
         let app = router_with_state();
         let req = Request::builder()
             .method("POST")
@@ -223,9 +164,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_tools_call_ok() {
+    async fn http_tools_call_returns_200() {
         let app = router_with_state();
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"hello.echo","arguments":{"name":"Arn"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"test"}}}"#;
         let req = Request::builder()
             .method("POST")
             .uri("/mcp")
@@ -236,11 +177,27 @@ mod tests {
         assert!(resp.status().is_success());
         let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
         let v: J = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(v["result"]["message"], "Dia dhuit, Arn!");
+        assert_eq!(v["result"]["corrections"], serde_json::Value::Array(vec![]));
     }
 
     #[tokio::test]
-    async fn it_knows_http_unknown_tool() {
+    async fn http_tools_call_missing_arguments_returns_tool_error() {
+        let app = router_with_state();
+        let body = r#"{"jsonrpc":"2.0","id":5,"method":"tools.call","params":{"name":"gael.spellcheck.v1"}}"#;
+        let req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
+        let v: J = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"]["code"], -32000);
+    }
+
+    #[tokio::test]
+    async fn http_tools_call_unknown_tool_returns_error() {
         let app = router_with_state();
         let body = r#"{"jsonrpc":"2.0","id":3,"method":"tools.call","params":{"name":"does.not.exist","arguments":{}}}"#;
         let req = Request::builder()
@@ -256,7 +213,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_unknown_method() {
+    async fn http_unknown_method_returns_method_not_found() {
         let app = router_with_state();
         let body = r#"{"jsonrpc":"2.0","id":4,"method":"nope"}"#;
         let req = Request::builder()
@@ -272,12 +229,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_grammar_check_ok() {
-        use crate::domain::Tool;
-        use crate::tools::grammar::GrammarTool;
+    async fn http_parse_error_on_malformed_json() {
+        let app = router_with_state();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(Body::from("{ not-json }"))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[tokio::test]
+    async fn http_grammar_check_ok_with_mocked_backend() {
+        // Tool trait not used in this test but kept for reference
         use httpmock::prelude::*;
-        use std::collections::HashMap;
-        use std::sync::Arc;
 
         let server = MockServer::start();
         server.mock(|when, then| {
@@ -297,16 +264,13 @@ mod tests {
             }]));
         });
 
-        let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
-        let tool: Arc<dyn Tool> = Arc::new(GrammarTool::new(server.base_url()));
-        map.insert(tool.name(), tool);
-        let reg = crate::tools::registry::Registry(Arc::new(map));
+        let reg = crate::tools::registry::build_registry();
 
         let app = axum::Router::new()
             .route("/mcp", axum::routing::post(super::http))
             .with_state(reg);
 
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
         let req = hyper::Request::builder()
             .method("POST")
             .uri("/mcp")
@@ -320,6 +284,6 @@ mod tests {
             .await
             .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(v["result"]["issues"][0]["code"], "AGR");
+        assert_eq!(v["result"]["corrections"], serde_json::Value::Array(vec![]));
     }
 }

@@ -1,21 +1,64 @@
 use axum::{
     routing::{any_service, get, post},
-    Router,
+    Json, Router,
 };
+use serde_json::{json, Value};
 use std::sync::Arc;
 
-use crate::infra::mcp;
+use crate::infra::runtime::mcp_transport;
 use crate::tools::registry::Registry;
+
+/// Enhanced health check endpoint with service status
+async fn health_check() -> Json<Value> {
+    let mut status = json!({
+        "status": "healthy",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "version": env!("CARGO_PKG_VERSION"),
+        "services": {}
+    });
+
+    // Check grammar service if configured
+    if let Ok(grammar_url) = std::env::var("GRAMADOIR_BASE_URL") {
+        if !grammar_url.is_empty() {
+            let client = crate::clients::gramadoir::GramadoirRemote::new(grammar_url);
+            match client.analyze("test").await {
+                Ok(_) => {
+                    status["services"]["grammar"] = json!({
+                        "status": "healthy",
+                        "url": std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default()
+                    });
+                }
+                Err(_) => {
+                    status["services"]["grammar"] = json!({
+                        "status": "unhealthy",
+                        "url": std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default()
+                    });
+                    status["status"] = json!("degraded");
+                }
+            }
+        }
+    }
+
+    Json(status)
+}
 
 /// Default, spec-compliant app: `/healthz` + streamable MCP at `/mcp`.
 pub fn build_app_default() -> Router {
     let session_mgr = Arc::new(
         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
     );
-    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env, session_mgr);
+    let factory = || {
+        let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
+        let handler = crate::tools::grammar::tool_router::GrammarSvc {
+            checker: crate::clients::gramadoir::GramadoirRemote::new(base),
+        };
+        let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
+        (handler, tools)
+    };
+    let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
 
     Router::new()
-        .route("/healthz", get(|| async { "ok" }))
+        .route("/healthz", get(health_check))
         .route_service("/mcp", any_service(mcp_service))
 }
 
@@ -24,10 +67,18 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
     let session_mgr = Arc::new(
         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
     );
-    let mcp_service = mcp::make_streamable_http_service(mcp::factory_from_env, session_mgr);
+    let factory = || {
+        let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
+        let handler = crate::tools::grammar::tool_router::GrammarSvc {
+            checker: crate::clients::gramadoir::GramadoirRemote::new(base),
+        };
+        let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
+        (handler, tools)
+    };
+    let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
 
     Router::new()
-        .route("/healthz", get(|| async { "ok" }))
+        .route("/healthz", get(health_check))
         .route_service("/mcp", any_service(mcp_service))
         .route("/v1/grammar/check", post(crate::api::mcp::http))
         .with_state(registry)
@@ -49,6 +100,37 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+
+        // Check response body is JSON
+        let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // Status can be "healthy" or "degraded" depending on grammar service availability
+        assert!(matches!(
+            json["status"].as_str(),
+            Some("healthy") | Some("degraded")
+        ));
+        assert!(json["timestamp"].is_string());
+        assert!(json["version"].is_string());
+    }
+
+    #[tokio::test]
+    async fn healthz_returns_structured_response() {
+        let app = build_app_default();
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+
+        let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        // Verify required fields
+        assert!(json["status"].is_string());
+        assert!(json["timestamp"].is_string());
+        assert!(json["version"].is_string());
+        assert!(json["services"].is_object());
     }
 
     #[tokio::test]
@@ -67,5 +149,23 @@ mod tests {
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert!(resp.status().is_success());
+    }
+
+    #[tokio::test]
+    async fn deprecated_route_returns_error_on_unknown_tool() {
+        let reg = crate::tools::registry::build_registry();
+        let app = build_app_with_deprecated_api(reg);
+
+        let body = r#"{"jsonrpc":"2.0","id":99,"method":"tools.call","params":{"name":"does.not.exist","arguments":{}}}"#;
+        let req = Request::builder()
+            .method("POST")
+            .uri("/v1/grammar/check")
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(body))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"]["code"], -32000);
     }
 }

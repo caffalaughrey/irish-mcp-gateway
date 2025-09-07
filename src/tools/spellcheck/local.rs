@@ -34,7 +34,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_backend_placeholder_returns_empty() {
-        let tool = SpellcheckLocalBackend::default();
+        let tool = SpellcheckLocalBackend;
         let out = tool.call(&serde_json::json!({"text":"Dia"})).await.unwrap();
         assert!(out["corrections"].as_array().unwrap().is_empty());
     }

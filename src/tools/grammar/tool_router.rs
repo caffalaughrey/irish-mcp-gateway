@@ -57,15 +57,13 @@ mod tests {
     fn test_grammar_svc_creation() {
         let checker = GramadoirRemote::new("http://test".to_string());
         let _svc = GrammarSvc { checker };
-        // Test that we can create the service
-        assert!(true);
+        // created
     }
 
     #[test]
     fn test_grammar_router_creation() {
         let _router = GrammarSvc::router();
-        // Test that we can create the router
-        assert!(true);
+        // created
     }
 
     #[test]
@@ -73,8 +71,7 @@ mod tests {
         let checker = GramadoirRemote::new("http://test".to_string());
         let svc = GrammarSvc { checker };
         let _svc_clone = svc.clone();
-        // Test that we can clone the service
-        assert!(true);
+        // cloned
     }
 
     #[tokio::test]
@@ -118,8 +115,7 @@ mod tests {
     #[test]
     fn test_grammar_router_type_alias() {
         let _router: GrammarRouter = GrammarSvc::router();
-        // Test that the type alias works
-        assert!(true);
+        // type alias compiles
     }
 
     #[test]

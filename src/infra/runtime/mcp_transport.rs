@@ -60,8 +60,6 @@ mod tests {
         };
 
         let _service = make_streamable_http_service(factory, session_mgr);
-        // Test that we can create the service without errors
-        assert!(true);
     }
 
     #[tokio::test]
@@ -75,8 +73,6 @@ mod tests {
         };
 
         let _service = make_streamable_http_service(factory, session_mgr);
-        // Test that we can create the service without errors
-        assert!(true);
     }
 
     #[test]
@@ -89,7 +85,6 @@ mod tests {
         };
 
         // Test that factory can be called (we can't easily test the full stdio flow)
-        let (_, _) = factory();
-        assert!(true);
+        let _ = factory();
     }
 }

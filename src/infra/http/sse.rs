@@ -4,6 +4,6 @@
 mod tests {
     #[test]
     fn it_compiles() {
-        assert!(true);
+        // no-op
     }
 }

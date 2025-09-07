@@ -9,7 +9,7 @@ pub fn build_registry() -> Registry {
     let mut map: HashMap<&'static str, Arc<dyn Tool>> = HashMap::new();
 
     // Always include spellcheck placeholder (local)
-    let spellcheck: Arc<dyn Tool> = Arc::new(SpellcheckLocalBackend::default());
+    let spellcheck: Arc<dyn Tool> = Arc::new(SpellcheckLocalBackend);
     map.insert("gael.spellcheck.v1", spellcheck);
 
     // Conditionally include remote spellcheck if configured

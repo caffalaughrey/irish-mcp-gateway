@@ -14,6 +14,5 @@ mod tests {
     fn init_is_idempotent() {
         super::init();
         super::init();
-        assert!(true);
     }
 }

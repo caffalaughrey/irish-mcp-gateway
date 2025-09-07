@@ -22,3 +22,38 @@ pub fn parse_error(message: impl Into<String>) -> Json<RpcResp> {
         }),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::Json as AxumJson;
+    use serde_json::{json, Value};
+
+    #[test]
+    fn wraps_ok_response_in_json_rpc_envelope() {
+        let AxumJson(resp) = ok(json!(1), json!({"x": 1}));
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert!(resp.error.is_none());
+        assert_eq!(resp.result.unwrap()["x"], 1);
+    }
+
+    #[test]
+    fn wraps_error_response_in_json_rpc_envelope() {
+        let AxumJson(resp) = error(Value::Null, -32601, "method not found");
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert!(resp.result.is_none());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, -32601);
+        assert!(err.message.contains("method not found"));
+    }
+
+    #[test]
+    fn builds_parse_error_with_standard_code() {
+        let AxumJson(resp) = parse_error("bad json");
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert!(resp.result.is_none());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, -32700);
+        assert!(err.message.contains("bad json"));
+    }
+}

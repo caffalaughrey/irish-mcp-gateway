@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn it_knows_tools_list_shape() {
+    fn tools_list_returns_expected_shape() {
         let reg = crate::tools::registry::build_registry();
         let v = super::tools_list(&reg);
         assert!(v["tools"].is_array());
@@ -131,7 +131,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_call_tool_happy_path() {
+    async fn call_tool_returns_corrections_array() {
         let reg = crate::tools::registry::build_registry();
         let out = super::call_tool(
             &reg,
@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_tools_list() {
+    async fn http_tools_list_returns_200_and_array() {
         let app = router_with_state();
         let req = Request::builder()
             .method("POST")
@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_tools_call_ok() {
+    async fn http_tools_call_returns_200() {
         let app = router_with_state();
         let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"test"}}}"#;
         let req = Request::builder()
@@ -181,7 +181,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_unknown_tool() {
+    async fn http_tools_call_missing_arguments_returns_tool_error() {
+        let app = router_with_state();
+        let body = r#"{"jsonrpc":"2.0","id":5,"method":"tools.call","params":{"name":"gael.spellcheck.v1"}}"#;
+        let req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let bytes = to_bytes(resp.into_body(), BODY_LIMIT).await.unwrap();
+        let v: J = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"]["code"], -32000);
+    }
+
+    #[tokio::test]
+    async fn http_tools_call_unknown_tool_returns_error() {
         let app = router_with_state();
         let body = r#"{"jsonrpc":"2.0","id":3,"method":"tools.call","params":{"name":"does.not.exist","arguments":{}}}"#;
         let req = Request::builder()
@@ -197,7 +213,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_unknown_method() {
+    async fn http_unknown_method_returns_method_not_found() {
         let app = router_with_state();
         let body = r#"{"jsonrpc":"2.0","id":4,"method":"nope"}"#;
         let req = Request::builder()
@@ -213,7 +229,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_knows_http_grammar_check_ok() {
+    async fn http_parse_error_on_malformed_json() {
+        let app = router_with_state();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(Body::from("{ not-json }"))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[tokio::test]
+    async fn http_grammar_check_ok_with_mocked_backend() {
         // Tool trait not used in this test but kept for reference
         use httpmock::prelude::*;
 

@@ -89,7 +89,7 @@ async fn health_check(url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let response = client
         .get(format!("{}/healthz", url))
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_millis(500))
         .send()
         .await?;
 
@@ -152,7 +152,7 @@ async fn show_status(url: &str) -> Result<(), Box<dyn std::error::Error>> {
             "method": "tools/list",
             "params": {}
         }))
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_millis(500))
         .send()
         .await;
 
@@ -224,9 +224,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_check_success() {
-        // This would need a running service, so we'll test the error case
+        // This would need a running service; expect an error
         let result = health_check("http://localhost:9999").await;
-        assert!(result.is_err()); // Should fail on non-existent service
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn health_check_returns_ok_on_200() {
+        use httpmock::prelude::*;
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(GET).path("/healthz");
+            then.status(200).body("ok");
+        });
+        let ok = health_check(&server.base_url()).await;
+        assert!(ok.is_ok());
     }
 
     #[test]
@@ -275,6 +287,35 @@ mod tests {
         env::remove_var("PORT");
     }
 
+    #[test]
+    fn validate_config_non_numeric_port_defaults() {
+        env::set_var("MODE", "server");
+        env::set_var("PORT", "abc");
+
+        let result = validate_config();
+        assert!(result.is_ok());
+
+        env::remove_var("MODE");
+        env::remove_var("PORT");
+    }
+
+    #[tokio::test]
+    async fn status_handles_non_200_health_and_tools() {
+        use httpmock::prelude::*;
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(GET).path("/healthz");
+            then.status(500).body("boom");
+        });
+        server.mock(|when, then| {
+            when.method(POST).path("/mcp");
+            then.status(500).body("boom");
+        });
+
+        let res = show_status(&server.base_url()).await;
+        assert!(res.is_ok());
+    }
+
     #[tokio::test]
     async fn test_test_grammar_no_url() {
         env::remove_var("GRAMADOIR_BASE_URL");
@@ -289,8 +330,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_test_grammar_with_url() {
-        // This would need a real grammar service, so we'll test the error case
+        // This would need a real grammar service; expect an error
         let result = test_grammar(Some("http://localhost:9999".to_string()), "test").await;
-        assert!(result.is_err()); // Should fail on non-existent service
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_status_handles_unavailable_service() {
+        // Should handle errors and return Err when service is down
+        let res = show_status("http://localhost:9999").await;
+        assert!(res.is_err());
     }
 }

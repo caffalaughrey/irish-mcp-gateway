@@ -6,3 +6,4 @@ pub mod http {
     pub mod sse;
 }
 pub mod runtime;
+pub mod boot;

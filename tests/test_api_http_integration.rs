@@ -8,7 +8,7 @@ use tower::ServiceExt;
 const BODY_LIMIT: usize = 1024 * 1024;
 
 #[tokio::test]
-async fn it_knows_e2e_list_and_call() {
+async fn http_e2e_tools_list_and_call() {
     let app = Router::new()
         .route("/mcp", post(mcp::http))
         .with_state(build_registry());

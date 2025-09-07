@@ -45,9 +45,26 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn remote_backend_placeholder_returns_empty() {
+    async fn remote_backend_returns_empty_on_happy_path() {
         let tool = SpellcheckRemoteBackend::new("http://example");
         let out = tool.call(&serde_json::json!({"text":"Dia"})).await.unwrap();
         assert!(out["corrections"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn remote_backend_returns_error_on_missing_text() {
+        let tool = SpellcheckRemoteBackend::new("http://example");
+        let err = tool.call(&serde_json::json!({})).await.unwrap_err();
+        assert!(err.contains("missing 'text'"));
+    }
+
+    #[tokio::test]
+    async fn remote_backend_returns_error_on_invalid_text_type() {
+        let tool = SpellcheckRemoteBackend::new("http://example");
+        let err = tool
+            .call(&serde_json::json!({"text": 123}))
+            .await
+            .unwrap_err();
+        assert!(err.contains("missing 'text'"));
     }
 }

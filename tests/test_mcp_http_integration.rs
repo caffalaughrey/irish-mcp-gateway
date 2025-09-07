@@ -12,7 +12,7 @@ use irish_mcp_gateway::infra::runtime::mcp_transport;
 static MCP_PROTOCOL_VERSION: &str = "0.5";
 
 #[tokio::test]
-async fn v2_initialize_list_and_call_using_pure_transport_and_tool_router() {
+async fn mcp_initialize_list_and_call_via_transport_and_tool_router() {
     // Build a Router<Service> using the refactored transport and grammar tool router
     let server = httpmock::MockServer::start();
     server.mock(|when, then| {
@@ -87,7 +87,7 @@ async fn v2_initialize_list_and_call_using_pure_transport_and_tool_router() {
         .header("MCP-Session-Id", session_id.clone())
         .body(axum::body::Body::from(list.to_string()))
         .unwrap();
-    let list_res = timeout(Duration::from_secs(20), app.clone().oneshot(list_req))
+    let list_res = timeout(Duration::from_secs(3), app.clone().oneshot(list_req))
         .await
         .unwrap()
         .unwrap();

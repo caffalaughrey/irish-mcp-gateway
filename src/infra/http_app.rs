@@ -150,4 +150,22 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert!(resp.status().is_success());
     }
+
+    #[tokio::test]
+    async fn deprecated_route_returns_error_on_unknown_tool() {
+        let reg = crate::tools::registry::build_registry();
+        let app = build_app_with_deprecated_api(reg);
+
+        let body = r#"{"jsonrpc":"2.0","id":99,"method":"tools.call","params":{"name":"does.not.exist","arguments":{}}}"#;
+        let req = Request::builder()
+            .method("POST")
+            .uri("/v1/grammar/check")
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(body))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"]["code"], -32000);
+    }
 }

@@ -19,8 +19,6 @@ async fn main() -> anyhow::Result<()> {
     infra::boot::run_server().await
 }
 
-
-
 #[inline]
 fn should_run_cli(arg_len: usize) -> bool {
     arg_len > 1

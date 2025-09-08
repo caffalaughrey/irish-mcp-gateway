@@ -1,5 +1,6 @@
 use axum::Json;
 
+use crate::core::error::GatewayError;
 use crate::core::mcp::{err as rpc_err, ok as rpc_ok, RpcErr, RpcResp};
 
 pub fn ok(id: serde_json::Value, result: serde_json::Value) -> Json<RpcResp> {
@@ -21,6 +22,11 @@ pub fn parse_error(message: impl Into<String>) -> Json<RpcResp> {
             data: None,
         }),
     })
+}
+
+/// Map a GatewayError into a JSON-RPC error response (-32000 application error)
+pub fn from_gateway_error(id: serde_json::Value, err: GatewayError) -> Json<RpcResp> {
+    error(id, -32000, err.to_string())
 }
 
 #[cfg(test)]

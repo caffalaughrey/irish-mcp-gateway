@@ -87,4 +87,29 @@ mod tests {
         let err = tool.call(&json!({})).await.unwrap_err();
         assert!(err.to_string().contains("missing 'text'"));
     }
+
+    #[test]
+    fn spec_fields_present() {
+        let t = GrammarTool::new("http://x");
+        assert_eq!(t.name(), "gael.grammar_check");
+        assert!(t.description().contains("grammar"));
+        let s = t.input_schema();
+        assert_eq!(s["type"], "object");
+        assert!(s["properties"]["text"].is_object());
+    }
+
+    #[tokio::test]
+    async fn it_propagates_remote_error() {
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/api/gramadoir/1.0")
+                .json_body(json!({"teacs":"X"}));
+            then.status(500).body("boom");
+        });
+
+        let tool = GrammarTool::new(server.base_url());
+        let err = tool.call(&json!({"text":"X"})).await.unwrap_err();
+        assert!(err.contains("status"));
+    }
 }

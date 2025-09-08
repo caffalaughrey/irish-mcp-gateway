@@ -56,4 +56,19 @@ mod tests {
         assert!(s["properties"]["name"].is_object());
         assert!(s["required"].is_array());
     }
+
+    #[tokio::test]
+    async fn it_handles_empty_and_non_string_name() {
+        let t = HelloTool;
+        let out = t.call(&json!({"name": 123})).await.unwrap();
+        // Falls back to default when not a string
+        assert!(out["message"].as_str().unwrap().contains("Dia dhuit"));
+    }
+
+    #[tokio::test]
+    async fn it_handles_explicit_name() {
+        let t = HelloTool;
+        let out = t.call(&json!({"name": "Aoife"})).await.unwrap();
+        assert_eq!(out["message"], "Dia dhuit, Aoife!");
+    }
 }

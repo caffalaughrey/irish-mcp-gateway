@@ -39,6 +39,27 @@ async fn health_check() -> Json<Value> {
         }
     }
 
+    // Check spellcheck tool health via registry if configured
+    if let Ok(spell_url) = std::env::var("SPELLCHECK_BASE_URL") {
+        if !spell_url.is_empty() {
+            let reg = crate::tools::registry::build_registry();
+            if let Some(tool) = reg.0.get("gael.spellcheck.v1") {
+                if tool.health().await {
+                    status["services"]["spellcheck"] = json!({
+                        "status": "healthy",
+                        "url": spell_url
+                    });
+                } else {
+                    status["services"]["spellcheck"] = json!({
+                        "status": "unhealthy",
+                        "url": spell_url
+                    });
+                    status["status"] = json!("degraded");
+                }
+            }
+        }
+    }
+
     Json(status)
 }
 
@@ -88,6 +109,8 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
 mod tests {
     use super::*;
     use axum::http::{Request, StatusCode};
+    use httpmock::prelude::*;
+    use serial_test::serial;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -134,6 +157,53 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
+    async fn healthz_indicates_grammar_healthy() {
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(200).json_body(serde_json::json!([]));
+        });
+
+        std::env::set_var("GRAMADOIR_BASE_URL", server.base_url());
+        let app = build_app_default();
+        let req = Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["services"]["grammar"]["status"], "healthy");
+        std::env::remove_var("GRAMADOIR_BASE_URL");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn healthz_indicates_grammar_unhealthy() {
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(500).body("boom");
+        });
+
+        std::env::set_var("GRAMADOIR_BASE_URL", server.base_url());
+        let app = build_app_default();
+        let req = Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["services"]["grammar"]["status"], "unhealthy");
+        assert_eq!(json["status"], "degraded");
+        std::env::remove_var("GRAMADOIR_BASE_URL");
+    }
+
+    #[tokio::test]
     async fn deprecated_route_handles_grammar_check_when_configured() {
         // Configure env so registry includes grammar tool
         std::env::set_var("GRAMADOIR_BASE_URL", "http://example");
@@ -167,5 +237,22 @@ mod tests {
         let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["error"]["code"], -32000);
+    }
+
+    #[tokio::test]
+    async fn healthz_json_shape_has_required_fields() {
+        let app = build_app_default();
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["status"].is_string());
+        assert!(json["timestamp"].is_string());
+        assert!(json["version"].is_string());
+        assert!(json["services"].is_object());
     }
 }

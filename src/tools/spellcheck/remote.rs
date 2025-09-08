@@ -1,17 +1,31 @@
 use async_trait::async_trait;
 
 use crate::core::tool::{Tool, ToolSpec};
+use crate::infra::http::headers::generate_request_id;
+use crate::infra::runtime::limits::make_http_client;
 
 #[derive(Clone)]
 pub struct SpellcheckRemoteBackend {
     #[allow(dead_code)]
     pub(crate) base_url: String,
+    http: reqwest::Client,
 }
 
 impl SpellcheckRemoteBackend {
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
             base_url: base_url.into(),
+            http: make_http_client(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub async fn health(&self) -> bool {
+        let id = generate_request_id();
+        let url = format!("{}/health", self.base_url.trim_end_matches('/'));
+        match self.http.get(url).header("x-request-id", id).send().await {
+            Ok(resp) => resp.status().is_success(),
+            Err(_) => false,
         }
     }
 }
@@ -37,6 +51,11 @@ impl Tool for SpellcheckRemoteBackend {
             .ok_or("missing 'text'")?;
         // Placeholder: just echo empty corrections for now
         Ok(serde_json::json!({"corrections": []}))
+    }
+
+    async fn health(&self) -> bool {
+        // Delegate to inherent health probe
+        SpellcheckRemoteBackend::health(self).await
     }
 }
 
@@ -66,5 +85,14 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.contains("missing 'text'"));
+    }
+
+    #[test]
+    fn tool_spec_metadata_present() {
+        let t = SpellcheckRemoteBackend::new("http://example");
+        assert_eq!(t.name(), "gael.spellcheck.v1");
+        assert!(t.description().contains("spellcheck"));
+        let s = t.input_schema();
+        assert_eq!(s["type"], "object");
     }
 }

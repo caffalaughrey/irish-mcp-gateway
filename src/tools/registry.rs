@@ -26,8 +26,10 @@ pub fn build_registry() -> Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn it_includes_spellcheck_when_configured() {
         std::env::set_var("SPELLCHECK_BASE_URL", "http://example");
         let reg = build_registry();

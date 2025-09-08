@@ -2,6 +2,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::GrammarIssue;
+use crate::infra::http::headers::{add_standard_headers, generate_request_id};
 use crate::infra::runtime::limits::{make_http_client, retry_async};
 
 #[derive(Clone)]
@@ -19,18 +20,32 @@ impl GramadoirRemote {
         }
     }
 
+    #[allow(dead_code)]
+    pub async fn health(&self) -> bool {
+        let url = format!("{}/health", self.base.trim_end_matches('/'));
+        let (builder, _rid) = add_standard_headers(self.http.get(url), None);
+        match builder.send().await {
+            Ok(resp) => resp.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
     pub async fn analyze(&self, text: &str) -> Result<Vec<GrammarIssue>, String> {
+        // TODO(refactor-fit-and-finish): Once we centralize ToolBackend HTTP clients,
+        // thread a shared client and request-id middleware through this path.
         let url = format!("{}/api/gramadoir/1.0", self.base.trim_end_matches('/'));
         let http = self.http.clone();
         let url_clone = url.clone();
         tracing::debug!(endpoint = %url, "gramadoir.analyze request");
+        let req_id = generate_request_id();
         let issues: Vec<IssueWire> = retry_async(2, move |_| {
             let http = http.clone();
             let url = url_clone.clone();
+            let req_id = req_id.clone();
             let payload = TeacsReq { teacs: text };
             async move {
-                let resp = http
-                    .post(url)
+                let (builder, _rid) = add_standard_headers(http.post(url), Some(req_id));
+                let resp = builder
                     .json(&payload)
                     .send()
                     .await
@@ -143,5 +158,68 @@ mod tests {
         assert_eq!(out[0].message, "Initial mutation missing");
         assert_eq!(out[0].start, 12);
         assert_eq!(out[0].end, 21);
+    }
+
+    #[tokio::test]
+    async fn it_retries_then_succeeds() {
+        let server = MockServer::start();
+
+        // First call 500
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(500).body("err");
+        });
+
+        // Second call 200 with empty array
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(200).json_body(json!([]));
+        });
+
+        let cli = GramadoirRemote::new(server.base_url());
+        let out = cli.analyze("x").await.unwrap_or_default();
+        assert!(out.is_empty());
+    }
+
+    #[tokio::test]
+    async fn it_returns_upstream_status_on_client_error() {
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(400).body("bad");
+        });
+        let cli = GramadoirRemote::new(server.base_url());
+        let err = cli.analyze("x").await.unwrap_err();
+        assert!(err.contains("upstream status"));
+    }
+
+    #[tokio::test]
+    async fn it_sets_request_id_header() {
+        let server = MockServer::start();
+        let m = server.mock(|when, then| {
+            when.method(POST)
+                .path("/api/gramadoir/1.0")
+                .header_exists("x-request-id")
+                .header_exists("user-agent");
+            then.status(200).json_body(json!([]));
+        });
+        let cli = GramadoirRemote::new(server.base_url());
+        let _ = cli.analyze("x").await.unwrap();
+        m.assert();
+    }
+
+    #[tokio::test]
+    async fn health_gets_200() {
+        let server = MockServer::start();
+        let m = server.mock(|when, then| {
+            when.method(GET)
+                .path("/health")
+                .header_exists("x-request-id")
+                .header_exists("user-agent");
+            then.status(200).body("ok");
+        });
+        let cli = GramadoirRemote::new(server.base_url());
+        assert!(cli.health().await);
+        m.assert();
     }
 }

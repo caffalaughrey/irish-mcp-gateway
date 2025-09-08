@@ -44,7 +44,11 @@ pub enum Commands {
 pub async fn run() -> ExitCode {
     let cli = Cli::parse();
 
-    match cli.command {
+    run_commands(cli.command).await
+}
+
+pub async fn run_commands(command: Commands) -> ExitCode {
+    match command {
         Commands::Health { url } => match health_check(&url).await {
             Ok(_) => {
                 println!("✅ Service is healthy");
@@ -221,6 +225,7 @@ async fn test_grammar(url: Option<String>, text: &str) -> Result<(), Box<dyn std
 mod tests {
     use super::*;
     use std::env;
+    use serial_test::serial;
 
     #[tokio::test]
     async fn test_health_check_success() {
@@ -242,6 +247,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_validate_config_valid() {
         env::set_var("MODE", "server");
         env::set_var("PORT", "8080");
@@ -254,6 +260,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_validate_config_invalid_mode() {
         env::set_var("MODE", "invalid");
 
@@ -265,6 +272,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_validate_config_stdio_mode() {
         env::set_var("MODE", "stdio");
 
@@ -275,6 +283,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_validate_config_invalid_port() {
         env::set_var("MODE", "server");
         env::set_var("PORT", "0");
@@ -288,6 +297,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn validate_config_non_numeric_port_defaults() {
         env::set_var("MODE", "server");
         env::set_var("PORT", "abc");
@@ -317,6 +327,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_test_grammar_no_url() {
         env::remove_var("GRAMADOIR_BASE_URL");
 
@@ -340,5 +351,71 @@ mod tests {
         // Should handle errors and return Err when service is down
         let res = show_status("http://localhost:9999").await;
         assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn run_commands_config_success() {
+        let code = run_commands(Commands::Config { validate: true }).await;
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn run_commands_config_failure() {
+        env::set_var("MODE", "nope");
+        let code = run_commands(Commands::Config { validate: true }).await;
+        assert_eq!(code, ExitCode::FAILURE);
+        env::remove_var("MODE");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn run_commands_health_and_status() {
+        // Health should fail against invalid URL and still return FAILURE
+        let health = run_commands(Commands::Health { url: "http://localhost:9".into() }).await;
+        assert_eq!(health, ExitCode::FAILURE);
+
+        let status = run_commands(Commands::Status { url: "http://localhost:9".into() }).await;
+        assert_eq!(status, ExitCode::FAILURE);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn run_commands_test_grammar_no_url() {
+        env::remove_var("GRAMADOIR_BASE_URL");
+        let code = run_commands(Commands::TestGrammar { url: None, text: "abc".into() }).await;
+        assert_eq!(code, ExitCode::FAILURE);
+    }
+
+    #[tokio::test]
+    async fn health_check_ok_and_error_paths() {
+        use httpmock::prelude::*;
+        let server = MockServer::start();
+        server.mock(|when, then| { when.method(GET).path("/healthz"); then.status(200); });
+        assert!(super::health_check(&server.base_url()).await.is_ok());
+
+        let bad = MockServer::start();
+        bad.mock(|when, then| { when.method(GET).path("/healthz"); then.status(500); });
+        assert!(super::health_check(&bad.base_url()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn show_status_ok_path() {
+        use httpmock::prelude::*;
+        let server = MockServer::start();
+        server.mock(|when, then| { when.method(GET).path("/healthz"); then.status(200).body("ok"); });
+        server.mock(|when, then| { when.method(POST).path("/mcp"); then.status(200).body("ok"); });
+        let res = super::show_status(&server.base_url()).await;
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn run_commands_health_success() {
+        use httpmock::prelude::*;
+        let server = MockServer::start();
+        server.mock(|when, then| { when.method(GET).path("/healthz"); then.status(200).body("ok"); });
+        let code = run_commands(Commands::Health { url: server.base_url() }).await;
+        assert_eq!(code, ExitCode::SUCCESS);
     }
 }

@@ -23,4 +23,11 @@ mod tests {
         let e = GatewayError::Message("boom".into());
         assert_eq!(e.to_string(), "boom");
     }
+
+    #[test]
+    fn it_converts_from_anyhow() {
+        let any: anyhow::Error = anyhow::anyhow!("nope");
+        let gw: GatewayError = any.into();
+        assert_eq!(gw.to_string(), "nope");
+    }
 }

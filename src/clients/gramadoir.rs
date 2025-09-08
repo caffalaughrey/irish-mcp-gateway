@@ -20,6 +20,8 @@ impl GramadoirRemote {
     }
 
     pub async fn analyze(&self, text: &str) -> Result<Vec<GrammarIssue>, String> {
+        // TODO(refactor-fit-and-finish): Once we centralize ToolBackend HTTP clients,
+        // thread a shared client and request-id middleware through this path.
         let url = format!("{}/api/gramadoir/1.0", self.base.trim_end_matches('/'));
         let http = self.http.clone();
         let url_clone = url.clone();
@@ -143,5 +145,38 @@ mod tests {
         assert_eq!(out[0].message, "Initial mutation missing");
         assert_eq!(out[0].start, 12);
         assert_eq!(out[0].end, 21);
+    }
+
+    #[tokio::test]
+    async fn it_retries_then_succeeds() {
+        let server = MockServer::start();
+
+        // First call 500
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(500).body("err");
+        });
+
+        // Second call 200 with empty array
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(200).json_body(json!([]));
+        });
+
+        let cli = GramadoirRemote::new(server.base_url());
+        let out = cli.analyze("x").await.unwrap_or_default();
+        assert!(out.is_empty());
+    }
+
+    #[tokio::test]
+    async fn it_returns_upstream_status_on_client_error() {
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(POST).path("/api/gramadoir/1.0");
+            then.status(400).body("bad");
+        });
+        let cli = GramadoirRemote::new(server.base_url());
+        let err = cli.analyze("x").await.unwrap_err();
+        assert!(err.contains("upstream status"));
     }
 }

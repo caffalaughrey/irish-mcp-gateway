@@ -40,8 +40,10 @@ pub async fn run_server() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn app_factory_selects_server_by_default() {
         std::env::remove_var("MODE");
         let cfg = Config::from_env();

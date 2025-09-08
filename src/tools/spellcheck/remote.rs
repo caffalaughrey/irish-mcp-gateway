@@ -67,4 +67,13 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("missing 'text'"));
     }
+
+    #[test]
+    fn tool_spec_metadata_present() {
+        let t = SpellcheckRemoteBackend::new("http://example");
+        assert_eq!(t.name(), "gael.spellcheck.v1");
+        assert!(t.description().contains("spellcheck"));
+        let s = t.input_schema();
+        assert_eq!(s["type"], "object");
+    }
 }

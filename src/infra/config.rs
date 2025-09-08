@@ -26,8 +26,10 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::Config;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn it_parses_env_and_defaults_serially() {
         // Defaults when unset/empty
         std::env::remove_var("MODE");

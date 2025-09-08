@@ -109,9 +109,9 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
 mod tests {
     use super::*;
     use axum::http::{Request, StatusCode};
-    use tower::ServiceExt;
-    use serial_test::serial;
     use httpmock::prelude::*;
+    use serial_test::serial;
+    use tower::ServiceExt;
 
     #[tokio::test]
     async fn healthz_responds_ok_on_default_app() {
@@ -167,7 +167,11 @@ mod tests {
 
         std::env::set_var("GRAMADOIR_BASE_URL", server.base_url());
         let app = build_app_default();
-        let req = Request::builder().method("GET").uri("/healthz").body(axum::body::Body::empty()).unwrap();
+        let req = Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -186,7 +190,11 @@ mod tests {
 
         std::env::set_var("GRAMADOIR_BASE_URL", server.base_url());
         let app = build_app_default();
-        let req = Request::builder().method("GET").uri("/healthz").body(axum::body::Body::empty()).unwrap();
+        let req = Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         let body = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();

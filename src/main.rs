@@ -34,7 +34,9 @@ mod tests {
     struct TestExiter(std::sync::Arc<std::sync::Mutex<Option<i32>>>);
 
     impl TestExiter {
-        fn new(store: std::sync::Arc<std::sync::Mutex<Option<i32>>>) -> Self { Self(store) }
+        fn new(store: std::sync::Arc<std::sync::Mutex<Option<i32>>>) -> Self {
+            Self(store)
+        }
     }
 
     impl Exiter for TestExiter {

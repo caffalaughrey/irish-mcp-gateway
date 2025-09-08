@@ -132,9 +132,15 @@ mod tests {
     struct SpecAndBackend;
 
     impl ToolSpec for SpecAndBackend {
-        fn name(&self) -> &'static str { "test.combo" }
-        fn description(&self) -> &'static str { "combo tool" }
-        fn input_schema(&self) -> serde_json::Value { serde_json::json!({"type":"object","properties":{}}) }
+        fn name(&self) -> &'static str {
+            "test.combo"
+        }
+        fn description(&self) -> &'static str {
+            "combo tool"
+        }
+        fn input_schema(&self) -> serde_json::Value {
+            serde_json::json!({"type":"object","properties":{}})
+        }
     }
 
     #[async_trait]

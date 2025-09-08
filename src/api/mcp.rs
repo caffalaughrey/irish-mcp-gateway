@@ -3,10 +3,10 @@ use axum::Json;
 use serde_json::{json, Value as J};
 use std::io::{self, BufRead, Write};
 
+use crate::core::error::GatewayError;
 use crate::core::mcp::{err as rpc_err, ok as rpc_ok};
 use crate::core::mcp::{RpcReq, RpcResp};
 use crate::infra::http::json as http_json;
-use crate::core::error::GatewayError;
 
 fn tools_list(reg: &Registry) -> J {
     let tools: Vec<J> = reg.0.values().map(|t| {
@@ -140,7 +140,6 @@ mod tests {
     use hyper::Request;
     use serde_json::Value as J;
     use tower::ServiceExt;
-    
 
     const BODY_LIMIT: usize = 1024 * 1024;
 
@@ -177,7 +176,9 @@ mod tests {
     #[tokio::test]
     async fn call_tool_errors_on_missing_name() {
         let reg = crate::tools::registry::build_registry();
-        let err = super::call_tool(&reg, &serde_json::json!({})).await.unwrap_err();
+        let err = super::call_tool(&reg, &serde_json::json!({}))
+            .await
+            .unwrap_err();
         assert!(err.contains("missing tool name"));
     }
 
@@ -280,16 +281,26 @@ mod tests {
     #[tokio::test]
     async fn handle_stdio_line_covers_initialize_and_list() {
         let reg = crate::tools::registry::build_registry();
-        let init = super::handle_stdio_line(&reg, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}").await;
+        let init = super::handle_stdio_line(
+            &reg,
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}",
+        )
+        .await;
         assert!(init.contains("\"result\""));
-        let list = super::handle_stdio_line(&reg, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools.list\"}").await;
+        let list = super::handle_stdio_line(
+            &reg,
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools.list\"}",
+        )
+        .await;
         assert!(list.contains("tools"));
     }
 
     #[tokio::test]
     async fn handle_stdio_line_covers_unknown_and_parse_error() {
         let reg = crate::tools::registry::build_registry();
-        let unk = super::handle_stdio_line(&reg, "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"nope\"}").await;
+        let unk =
+            super::handle_stdio_line(&reg, "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"nope\"}")
+                .await;
         assert!(unk.contains("-32601"));
         let bad = super::handle_stdio_line(&reg, "{ not json }").await;
         assert!(bad.contains("parse error"));
@@ -303,7 +314,9 @@ mod tests {
             .method("POST")
             .uri("/mcp")
             .header("content-type", "application/json")
-            .body(Body::from("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools.list\"}"))
+            .body(Body::from(
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools.list\"}",
+            ))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert!(resp.status().is_success());
@@ -318,7 +331,9 @@ mod tests {
             .method("POST")
             .uri("/mcp")
             .header("content-type", "application/json")
-            .body(Body::from("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"initialize\"}"))
+            .body(Body::from(
+                "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"initialize\"}",
+            ))
             .unwrap();
         let resp = app.clone().oneshot(init).await.unwrap();
         assert!(resp.status().is_success());
@@ -328,7 +343,9 @@ mod tests {
             .method("POST")
             .uri("/mcp")
             .header("content-type", "application/json")
-            .body(Body::from("{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"shutdown\"}"))
+            .body(Body::from(
+                "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"shutdown\"}",
+            ))
             .unwrap();
         let resp = app.clone().oneshot(shut).await.unwrap();
         assert!(resp.status().is_success());

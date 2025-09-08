@@ -1,7 +1,7 @@
 use axum::Json;
 
-use crate::core::mcp::{err as rpc_err, ok as rpc_ok, RpcErr, RpcResp};
 use crate::core::error::GatewayError;
+use crate::core::mcp::{err as rpc_err, ok as rpc_ok, RpcErr, RpcResp};
 
 pub fn ok(id: serde_json::Value, result: serde_json::Value) -> Json<RpcResp> {
     Json(rpc_ok(id, result))

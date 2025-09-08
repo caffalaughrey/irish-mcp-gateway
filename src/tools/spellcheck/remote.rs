@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use crate::core::tool::{Tool, ToolSpec};
-use crate::infra::runtime::limits::make_http_client;
 use crate::infra::http::headers::generate_request_id;
+use crate::infra::runtime::limits::make_http_client;
 
 #[derive(Clone)]
 pub struct SpellcheckRemoteBackend {
@@ -23,13 +23,7 @@ impl SpellcheckRemoteBackend {
     pub async fn health(&self) -> bool {
         let id = generate_request_id();
         let url = format!("{}/health", self.base_url.trim_end_matches('/'));
-        match self
-            .http
-            .get(url)
-            .header("x-request-id", id)
-            .send()
-            .await
-        {
+        match self.http.get(url).header("x-request-id", id).send().await {
             Ok(resp) => resp.status().is_success(),
             Err(_) => false,
         }

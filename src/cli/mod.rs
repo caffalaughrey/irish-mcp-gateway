@@ -224,8 +224,8 @@ async fn test_grammar(url: Option<String>, text: &str) -> Result<(), Box<dyn std
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use serial_test::serial;
+    use std::env;
 
     #[tokio::test]
     async fn test_health_check_success() {
@@ -373,10 +373,16 @@ mod tests {
     #[serial]
     async fn run_commands_health_and_status() {
         // Health should fail against invalid URL and still return FAILURE
-        let health = run_commands(Commands::Health { url: "http://localhost:9".into() }).await;
+        let health = run_commands(Commands::Health {
+            url: "http://localhost:9".into(),
+        })
+        .await;
         assert_eq!(health, ExitCode::FAILURE);
 
-        let status = run_commands(Commands::Status { url: "http://localhost:9".into() }).await;
+        let status = run_commands(Commands::Status {
+            url: "http://localhost:9".into(),
+        })
+        .await;
         assert_eq!(status, ExitCode::FAILURE);
     }
 
@@ -384,7 +390,11 @@ mod tests {
     #[serial]
     async fn run_commands_test_grammar_no_url() {
         env::remove_var("GRAMADOIR_BASE_URL");
-        let code = run_commands(Commands::TestGrammar { url: None, text: "abc".into() }).await;
+        let code = run_commands(Commands::TestGrammar {
+            url: None,
+            text: "abc".into(),
+        })
+        .await;
         assert_eq!(code, ExitCode::FAILURE);
     }
 
@@ -392,11 +402,17 @@ mod tests {
     async fn health_check_ok_and_error_paths() {
         use httpmock::prelude::*;
         let server = MockServer::start();
-        server.mock(|when, then| { when.method(GET).path("/healthz"); then.status(200); });
+        server.mock(|when, then| {
+            when.method(GET).path("/healthz");
+            then.status(200);
+        });
         assert!(super::health_check(&server.base_url()).await.is_ok());
 
         let bad = MockServer::start();
-        bad.mock(|when, then| { when.method(GET).path("/healthz"); then.status(500); });
+        bad.mock(|when, then| {
+            when.method(GET).path("/healthz");
+            then.status(500);
+        });
         assert!(super::health_check(&bad.base_url()).await.is_err());
     }
 
@@ -404,8 +420,14 @@ mod tests {
     async fn show_status_ok_path() {
         use httpmock::prelude::*;
         let server = MockServer::start();
-        server.mock(|when, then| { when.method(GET).path("/healthz"); then.status(200).body("ok"); });
-        server.mock(|when, then| { when.method(POST).path("/mcp"); then.status(200).body("ok"); });
+        server.mock(|when, then| {
+            when.method(GET).path("/healthz");
+            then.status(200).body("ok");
+        });
+        server.mock(|when, then| {
+            when.method(POST).path("/mcp");
+            then.status(200).body("ok");
+        });
         let res = super::show_status(&server.base_url()).await;
         assert!(res.is_ok());
     }
@@ -414,8 +436,14 @@ mod tests {
     async fn run_commands_health_success() {
         use httpmock::prelude::*;
         let server = MockServer::start();
-        server.mock(|when, then| { when.method(GET).path("/healthz"); then.status(200).body("ok"); });
-        let code = run_commands(Commands::Health { url: server.base_url() }).await;
+        server.mock(|when, then| {
+            when.method(GET).path("/healthz");
+            then.status(200).body("ok");
+        });
+        let code = run_commands(Commands::Health {
+            url: server.base_url(),
+        })
+        .await;
         assert_eq!(code, ExitCode::SUCCESS);
     }
 }

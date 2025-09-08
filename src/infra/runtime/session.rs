@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+#[allow(dead_code)]
 pub trait SessionStore: Send + Sync {
     fn get(&self, key: &str) -> Option<String>;
     fn set(&self, key: &str, value: String);
 }
 
 #[derive(Default, Clone)]
+#[allow(dead_code)]
 pub struct InMemorySessionStore(Arc<RwLock<HashMap<String, String>>>);
 
 impl SessionStore for InMemorySessionStore {

@@ -29,6 +29,7 @@ where
 /// Testable variant of stdio serving that accepts arbitrary IO.
 // TODO(refactor-fit-and-finish): When we wire full stdio MCP, craft rmcp-compliant
 // frames (using rmcp's serializer) in tests to assert positive roundtrips.
+#[allow(dead_code)]
 pub async fn serve_stdio_with_io<H, R, W>(
     factory: impl FnOnce() -> (H, ToolRouter<H>),
     reader: R,

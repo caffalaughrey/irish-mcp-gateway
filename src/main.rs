@@ -14,20 +14,53 @@ async fn main() -> anyhow::Result<()> {
     // TODO(refactor-fit-and-finish): Consider feature-gating CLI entry for smaller prod binary.
     if should_run_cli(std::env::args().len()) {
         let exit_code = cli::run().await;
-        ProcessExiter.exit(map_exit(exit_code));
+        PROCESS_EXITER.exit(map_exit(exit_code));
     }
     infra::boot::run_server().await
+}
+
+
+
+#[inline]
+fn should_run_cli(arg_len: usize) -> bool {
+    arg_len > 1
+}
+
+pub trait Exiter {
+    fn exit(&self, code: i32) -> !;
+}
+
+struct ProcessExiterType;
+static PROCESS_EXITER: ProcessExiterType = ProcessExiterType;
+
+impl Exiter for ProcessExiterType {
+    fn exit(&self, code: i32) -> ! {
+        std::process::exit(code)
+    }
+}
+
+#[inline]
+fn map_exit(code: std::process::ExitCode) -> i32 {
+    match code {
+        std::process::ExitCode::SUCCESS => 0,
+        _ => 1,
+    }
+}
+
+#[inline]
+#[allow(dead_code)]
+fn entry_with_exiter(args_len: usize, exiter: impl Exiter, code: std::process::ExitCode) {
+    if should_run_cli(args_len) {
+        exiter.exit(map_exit(code));
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::panic;
 
     #[tokio::test]
     async fn core_module_compiles() {
-        // This ensures the binary module links all submodules correctly.
-        // We cannot run main() in tests (it exits the process), but this covers presence.
         let _ = env!("CARGO_PKG_NAME");
     }
 
@@ -57,44 +90,10 @@ mod tests {
     fn entry_with_exiter_triggers_exit_when_args_present() {
         let store = std::sync::Arc::new(std::sync::Mutex::new(None));
         let exiter = TestExiter::new(store.clone());
-        let result = panic::catch_unwind(|| {
-            // simulate args_len > 1 and a SUCCESS exit code
+        let result = std::panic::catch_unwind(|| {
             entry_with_exiter(2, exiter, std::process::ExitCode::SUCCESS);
         });
         assert!(result.is_err());
         assert_eq!(*store.lock().unwrap(), Some(0));
-    }
-}
-
-#[inline]
-fn should_run_cli(arg_len: usize) -> bool {
-    arg_len > 1
-}
-
-pub trait Exiter {
-    fn exit(&self, code: i32) -> !;
-}
-
-struct ProcessExiterType;
-static ProcessExiter: ProcessExiterType = ProcessExiterType;
-
-impl Exiter for ProcessExiterType {
-    fn exit(&self, code: i32) -> ! {
-        std::process::exit(code)
-    }
-}
-
-#[inline]
-fn map_exit(code: std::process::ExitCode) -> i32 {
-    match code {
-        std::process::ExitCode::SUCCESS => 0,
-        _ => 1,
-    }
-}
-
-#[inline]
-fn entry_with_exiter(args_len: usize, exiter: impl Exiter, code: std::process::ExitCode) {
-    if should_run_cli(args_len) {
-        exiter.exit(map_exit(code));
     }
 }

@@ -20,6 +20,7 @@ impl GramadoirRemote {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn health(&self) -> bool {
         let url = format!("{}/health", self.base.trim_end_matches('/'));
         let (builder, _rid) = add_standard_headers(self.http.get(url), None);

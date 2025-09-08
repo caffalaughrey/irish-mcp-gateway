@@ -6,6 +6,7 @@ use std::io::{self, BufRead, Write};
 use crate::core::mcp::{err as rpc_err, ok as rpc_ok};
 use crate::core::mcp::{RpcReq, RpcResp};
 use crate::infra::http::json as http_json;
+use crate::core::error::GatewayError;
 
 fn tools_list(reg: &Registry) -> J {
     let tools: Vec<J> = reg.0.values().map(|t| {
@@ -77,7 +78,7 @@ pub async fn http(
                 resp
             }
             Err(e) => {
-                let resp = http_json::error(id.clone(), -32000, e).0;
+                let resp = http_json::from_gateway_error(id.clone(), GatewayError::Message(e)).0;
                 tracing::warn!(response = ?resp, "tools.call error response");
                 resp
             }

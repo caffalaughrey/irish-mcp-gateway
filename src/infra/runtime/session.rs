@@ -1,47 +1,33 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
-/// Minimal session store abstraction for future Redis swap.
-/// TODO(next branch): add Redis-backed SessionStore and wire behind a feature flag.
-#[derive(Clone, Default)]
-#[allow(dead_code)]
-pub struct InMemorySessionStore {
-    inner: Arc<Mutex<HashMap<String, serde_json::Value>>>,
+pub trait SessionStore: Send + Sync {
+	fn get(&self, key: &str) -> Option<String>;
+	fn set(&self, key: &str, value: String);
 }
 
-impl InMemorySessionStore {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self::default()
-    }
+#[derive(Default, Clone)]
+pub struct InMemorySessionStore(Arc<RwLock<HashMap<String, String>>>);
 
-    #[allow(dead_code)]
-    pub fn get(&self, key: &str) -> Option<serde_json::Value> {
-        self.inner.lock().unwrap().get(key).cloned()
-    }
-
-    #[allow(dead_code)]
-    pub fn set(&self, key: impl Into<String>, val: serde_json::Value) {
-        self.inner.lock().unwrap().insert(key.into(), val);
-    }
-
-    #[allow(dead_code)]
-    pub fn delete(&self, key: &str) {
-        self.inner.lock().unwrap().remove(key);
-    }
+impl SessionStore for InMemorySessionStore {
+	fn get(&self, key: &str) -> Option<String> {
+		self.0.read().ok()?.get(key).cloned()
+	}
+	fn set(&self, key: &str, value: String) {
+		if let Ok(mut m) = self.0.write() {
+			m.insert(key.to_string(), value);
+		}
+	}
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn it_stores_and_retrieves_values() {
-        let store = InMemorySessionStore::new();
-        store.set("s1", serde_json::json!({"ready": true}));
-        let v = store.get("s1").unwrap();
-        assert!(v["ready"].as_bool().unwrap());
-        store.delete("s1");
-        assert!(store.get("s1").is_none());
-    }
+	use super::*;
+	#[test]
+	fn in_memory_store_roundtrip() {
+		let store = InMemorySessionStore::default();
+		assert!(store.get("k").is_none());
+		store.set("k", "v".into());
+		assert_eq!(store.get("k").unwrap(), "v");
+	}
 }

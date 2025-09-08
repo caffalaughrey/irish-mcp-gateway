@@ -39,6 +39,27 @@ async fn health_check() -> Json<Value> {
         }
     }
 
+    // Check spellcheck tool health via registry if configured
+    if let Ok(spell_url) = std::env::var("SPELLCHECK_BASE_URL") {
+        if !spell_url.is_empty() {
+            let reg = crate::tools::registry::build_registry();
+            if let Some(tool) = reg.0.get("gael.spellcheck.v1") {
+                if tool.health().await {
+                    status["services"]["spellcheck"] = json!({
+                        "status": "healthy",
+                        "url": spell_url
+                    });
+                } else {
+                    status["services"]["spellcheck"] = json!({
+                        "status": "unhealthy",
+                        "url": spell_url
+                    });
+                    status["status"] = json!("degraded");
+                }
+            }
+        }
+    }
+
     Json(status)
 }
 

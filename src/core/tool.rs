@@ -17,7 +17,14 @@ pub trait ToolBackend: Send + Sync {
 /// Tool = Spec + Backend implementation
 #[async_trait]
 pub trait Tool: ToolSpec + Send + Sync {
+    /// Execute the tool with the given arguments, returning a JSON value or a string error.
     async fn call(&self, arguments: &serde_json::Value) -> Result<serde_json::Value, String>;
+
+    /// Optional liveness/health probe for the tool.
+    /// Defaults to healthy. Remote implementations should override.
+    async fn health(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

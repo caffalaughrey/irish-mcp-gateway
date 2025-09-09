@@ -7,7 +7,7 @@ pub struct SpellcheckLocalBackend;
 
 impl ToolSpec for SpellcheckLocalBackend {
     fn name(&self) -> &'static str {
-        "gael.spellcheck.v1"
+        "spell.check"
     }
     fn description(&self) -> &'static str {
         "Irish spellcheck (local placeholder)"

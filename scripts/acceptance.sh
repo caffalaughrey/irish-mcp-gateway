@@ -24,7 +24,7 @@ curl -s -S -i -X POST "$BASE/mcp" \
   -H "MCP-Session-Id: $SESSION_ID" \
   --data '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' | head -n 1
 
-echo "[3/4] Listing tools"
+echo "[3/5] Listing tools"
 TOOLS_JSON=$(curl -s -S -N -X POST "$BASE/mcp" \
   -H 'Accept: application/json, text/event-stream' \
   -H 'Content-Type: application/json' \
@@ -32,7 +32,15 @@ TOOLS_JSON=$(curl -s -S -N -X POST "$BASE/mcp" \
   --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | awk -F'data: ' '/^data: /{print $2; exit}')
 echo "$TOOLS_JSON" | jq '.result.tools | map(.name)'
 
-echo "[4/4] Calling gael.grammar_check"
+echo "[4/5] Calling spell.check via MCP"
+CALL_SPELL=$(curl -s -S -N -X POST "$BASE/mcp" \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Content-Type: application/json' \
+  -H "MCP-Session-Id: $SESSION_ID" \
+  --data '{"jsonrpc":"2.0","id":200,"method":"tools/call","params":{"name":"spell.check","arguments":{"text":"Ba mhaith liom abcdefxyz"}}}' | awk -F'data: ' '/^data: /{print $2; exit}')
+echo "$CALL_SPELL" | jq '.result.structuredContent.corrections // .result.corrections // .result'
+
+echo "[5/5] Calling gael.grammar_check"
 CALL_JSON=$(curl -s -S -N -X POST "$BASE/mcp" \
   -H 'Accept: application/json, text/event-stream' \
   -H 'Content-Type: application/json' \

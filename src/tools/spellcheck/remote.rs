@@ -1,38 +1,26 @@
 use async_trait::async_trait;
 
 use crate::core::tool::{Tool, ToolSpec};
-use crate::infra::http::headers::generate_request_id;
-use crate::infra::runtime::limits::make_http_client;
+use crate::clients::gaelspell::GaelspellRemote;
+ 
 
 #[derive(Clone)]
 pub struct SpellcheckRemoteBackend {
-    #[allow(dead_code)]
-    pub(crate) base_url: String,
-    http: reqwest::Client,
+    client: GaelspellRemote,
 }
 
 impl SpellcheckRemoteBackend {
     pub fn new(base_url: impl Into<String>) -> Self {
-        Self {
-            base_url: base_url.into(),
-            http: make_http_client(),
-        }
+        Self { client: GaelspellRemote::new(base_url) }
     }
 
     #[allow(dead_code)]
-    pub async fn health(&self) -> bool {
-        let id = generate_request_id();
-        let url = format!("{}/health", self.base_url.trim_end_matches('/'));
-        match self.http.get(url).header("x-request-id", id).send().await {
-            Ok(resp) => resp.status().is_success(),
-            Err(_) => false,
-        }
-    }
+    pub async fn health(&self) -> bool { self.client.health().await }
 }
 
 impl ToolSpec for SpellcheckRemoteBackend {
     fn name(&self) -> &'static str {
-        "gael.spellcheck.v1"
+        "spell.check"
     }
     fn description(&self) -> &'static str {
         "Irish spellcheck (remote backend placeholder)"
@@ -45,16 +33,15 @@ impl ToolSpec for SpellcheckRemoteBackend {
 #[async_trait]
 impl Tool for SpellcheckRemoteBackend {
     async fn call(&self, args: &serde_json::Value) -> Result<serde_json::Value, String> {
-        let _ = args
+        let text = args
             .get("text")
             .and_then(|v| v.as_str())
             .ok_or("missing 'text'")?;
-        // Placeholder: just echo empty corrections for now
-        Ok(serde_json::json!({"corrections": []}))
+        let corrections = self.client.check(text).await?;
+        Ok(serde_json::json!({"corrections": corrections}))
     }
 
     async fn health(&self) -> bool {
-        // Delegate to inherent health probe
         SpellcheckRemoteBackend::health(self).await
     }
 }
@@ -65,7 +52,16 @@ mod tests {
 
     #[tokio::test]
     async fn remote_backend_returns_empty_on_happy_path() {
-        let tool = SpellcheckRemoteBackend::new("http://example");
+        use httpmock::prelude::*;
+        use serde_json::json;
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/api/gaelspell/1.0")
+                .json_body(json!({"teacs":"Dia"}));
+            then.status(200).json_body(serde_json::json!([]));
+        });
+        let tool = SpellcheckRemoteBackend::new(server.base_url());
         let out = tool.call(&serde_json::json!({"text":"Dia"})).await.unwrap();
         assert!(out["corrections"].as_array().unwrap().is_empty());
     }
@@ -90,7 +86,7 @@ mod tests {
     #[test]
     fn tool_spec_metadata_present() {
         let t = SpellcheckRemoteBackend::new("http://example");
-        assert_eq!(t.name(), "gael.spellcheck.v1");
+        assert_eq!(t.name(), "spell.check");
         assert!(t.description().contains("spellcheck"));
         let s = t.input_schema();
         assert_eq!(s["type"], "object");

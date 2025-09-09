@@ -10,13 +10,13 @@ pub fn build_registry() -> Registry {
 
     // Always include spellcheck placeholder (local)
     let spellcheck: Arc<dyn Tool> = Arc::new(SpellcheckLocalBackend);
-    map.insert("gael.spellcheck.v1", spellcheck);
+    map.insert("spell.check", spellcheck);
 
     // Conditionally include remote spellcheck if configured
     if let Ok(base) = std::env::var("SPELLCHECK_BASE_URL") {
         if !base.trim().is_empty() {
             let remote_spellcheck: Arc<dyn Tool> = Arc::new(SpellcheckRemoteBackend::new(base));
-            map.insert("gael.spellcheck.v1", remote_spellcheck);
+            map.insert("spell.check", remote_spellcheck);
         }
     }
 
@@ -33,7 +33,7 @@ mod tests {
     fn it_includes_spellcheck_when_configured() {
         std::env::set_var("SPELLCHECK_BASE_URL", "http://example");
         let reg = build_registry();
-        assert!(reg.0.contains_key("gael.spellcheck.v1"));
+        assert!(reg.0.contains_key("spell.check"));
         std::env::remove_var("SPELLCHECK_BASE_URL");
     }
 }

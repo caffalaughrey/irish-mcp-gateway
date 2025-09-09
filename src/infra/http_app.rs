@@ -43,7 +43,7 @@ async fn health_check() -> Json<Value> {
     if let Ok(spell_url) = std::env::var("SPELLCHECK_BASE_URL") {
         if !spell_url.is_empty() {
             let reg = crate::tools::registry::build_registry();
-            if let Some(tool) = reg.0.get("gael.spellcheck.v1") {
+            if let Some(tool) = reg.0.get("spell.check") {
                 if tool.health().await {
                     status["services"]["spellcheck"] = json!({
                         "status": "healthy",
@@ -69,11 +69,8 @@ pub fn build_app_default() -> Router {
         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
     );
     let factory = || {
-        let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
-        let handler = crate::tools::grammar::tool_router::GrammarSvc {
-            checker: crate::clients::gramadoir::GramadoirRemote::new(base),
-        };
-        let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
+        let handler = crate::tools::mcp_router::UnifiedSvc;
+        let tools = crate::tools::mcp_router::UnifiedSvc::router();
         (handler, tools)
     };
     let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
@@ -89,11 +86,8 @@ pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
     );
     let factory = || {
-        let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
-        let handler = crate::tools::grammar::tool_router::GrammarSvc {
-            checker: crate::clients::gramadoir::GramadoirRemote::new(base),
-        };
-        let tools = crate::tools::grammar::tool_router::GrammarSvc::router();
+        let handler = crate::tools::mcp_router::UnifiedSvc;
+        let tools = crate::tools::mcp_router::UnifiedSvc::router();
         (handler, tools)
     };
     let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);

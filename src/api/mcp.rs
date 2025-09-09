@@ -155,7 +155,7 @@ mod tests {
         let reg = crate::tools::registry::build_registry();
         let v = super::tools_list(&reg);
         assert!(v["tools"].is_array());
-        assert_eq!(v["tools"][0]["name"], "gael.spellcheck.v1");
+        assert_eq!(v["tools"][0]["name"], "spell.check");
     }
 
     #[tokio::test]
@@ -164,7 +164,7 @@ mod tests {
         let out = super::call_tool(
             &reg,
             &serde_json::json!({
-                "name":"gael.spellcheck.v1",
+                "name":"spell.check",
                 "arguments":{"text":"test"}
             }),
         )
@@ -203,7 +203,7 @@ mod tests {
     #[tokio::test]
     async fn http_tools_call_returns_200() {
         let app = router_with_state();
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"test"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"spell.check","arguments":{"text":"test"}}}"#;
         let req = Request::builder()
             .method("POST")
             .uri("/mcp")
@@ -220,7 +220,7 @@ mod tests {
     #[tokio::test]
     async fn http_tools_call_missing_arguments_returns_tool_error() {
         let app = router_with_state();
-        let body = r#"{"jsonrpc":"2.0","id":5,"method":"tools.call","params":{"name":"gael.spellcheck.v1"}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":5,"method":"tools.call","params":{"name":"spell.check"}}"#;
         let req = Request::builder()
             .method("POST")
             .uri("/mcp")
@@ -380,7 +380,7 @@ mod tests {
             .route("/mcp", axum::routing::post(super::http))
             .with_state(reg);
 
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.spellcheck.v1","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"spell.check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
         let req = hyper::Request::builder()
             .method("POST")
             .uri("/mcp")

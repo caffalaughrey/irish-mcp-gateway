@@ -9,9 +9,7 @@ const BODY_LIMIT: usize = 1024 * 1024;
 
 #[tokio::test]
 async fn http_e2e_tools_list_and_call() {
-    let app = Router::new()
-        .route("/mcp", post(mcp::http))
-        .with_state(build_registry());
+    let app = Router::new().route("/mcp", post(mcp::http)).with_state(build_registry());
 
     // list
     let list = Request::builder()

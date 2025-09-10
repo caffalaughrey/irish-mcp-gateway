@@ -24,16 +24,13 @@ async fn mcp_initialize_list_and_call_via_transport_and_tool_router() {
         }]));
     });
 
-    let factory = {
-        let base = server.base_url();
-        move || {
-            let svc = irish_mcp_gateway::tools::grammar::tool_router::GrammarSvc {
-                checker: irish_mcp_gateway::clients::gramadoir::GramadoirRemote::new(base.clone()),
-            };
-            let tools: irish_mcp_gateway::tools::grammar::tool_router::GrammarRouter =
-                irish_mcp_gateway::tools::grammar::tool_router::GrammarSvc::router();
-            (svc, tools)
-        }
+    // Point UnifiedSvc at the mock server
+    std::env::set_var("GRAMADOIR_BASE_URL", server.base_url());
+
+    let factory = || {
+        let svc = irish_mcp_gateway::tools::mcp_router::UnifiedSvc;
+        let tools = irish_mcp_gateway::tools::mcp_router::UnifiedSvc::router();
+        (svc, tools)
     };
 
     let session_mgr = Arc::new(mcp_transport::LocalSessionManager::default());
@@ -116,4 +113,6 @@ async fn mcp_initialize_list_and_call_via_transport_and_tool_router() {
         .and_then(|d| serde_json::from_str::<Value>(&d).ok())
         .expect("Did not find an rpcResponse for tools/call");
     assert!(v["result"]["structuredContent"]["issues"].is_array());
+
+    std::env::remove_var("GRAMADOIR_BASE_URL");
 }

@@ -1,5 +1,5 @@
 use axum::{
-    routing::{any_service, get, post},
+    routing::{any_service, get},
     Json, Router,
 };
 use serde_json::{json, Value};
@@ -39,20 +39,21 @@ async fn health_check() -> Json<Value> {
         }
     }
 
-    // Check spellcheck tool health via registry if configured
+    // Spellcheck health via direct client if configured
     if let Ok(spell_url) = std::env::var("SPELLCHECK_BASE_URL") {
         if !spell_url.is_empty() {
-            let reg = crate::tools::registry::build_registry();
-            if let Some(tool) = reg.0.get("spell.check") {
-                if tool.health().await {
+            let client = crate::clients::gaelspell::GaelspellRemote::new(spell_url.clone());
+            match client.health().await {
+                true => {
                     status["services"]["spellcheck"] = json!({
                         "status": "healthy",
-                        "url": spell_url
+                        "url": std::env::var("SPELLCHECK_BASE_URL").unwrap_or_default()
                     });
-                } else {
+                }
+                false => {
                     status["services"]["spellcheck"] = json!({
                         "status": "unhealthy",
-                        "url": spell_url
+                        "url": std::env::var("SPELLCHECK_BASE_URL").unwrap_or_default()
                     });
                     status["status"] = json!("degraded");
                 }
@@ -81,23 +82,7 @@ pub fn build_app_default() -> Router {
 }
 
 /// Spec app **plus** deprecated demo REST route at `/v1/grammar/check`.
-pub fn build_app_with_deprecated_api(registry: Registry) -> Router {
-    let session_mgr = Arc::new(
-        rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
-    );
-    let factory = || {
-        let handler = crate::tools::mcp_router::UnifiedSvc;
-        let tools = crate::tools::mcp_router::UnifiedSvc::router();
-        (handler, tools)
-    };
-    let mcp_service = mcp_transport::make_streamable_http_service(factory, session_mgr);
-
-    Router::new()
-        .route("/healthz", get(health_check))
-        .route_service("/mcp", any_service(mcp_service))
-        .route("/v1/grammar/check", post(crate::api::mcp::http))
-        .with_state(registry)
-}
+// Deprecated REST route removed; use build_app_default only.
 
 #[cfg(test)]
 mod tests {
@@ -197,41 +182,7 @@ mod tests {
         std::env::remove_var("GRAMADOIR_BASE_URL");
     }
 
-    #[tokio::test]
-    async fn deprecated_route_handles_grammar_check_when_configured() {
-        // Configure env so registry includes grammar tool
-        std::env::set_var("GRAMADOIR_BASE_URL", "http://example");
-        let reg = crate::tools::registry::build_registry();
-        let app = build_app_with_deprecated_api(reg);
-
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"grammar.check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
-        let req = Request::builder()
-            .method("POST")
-            .uri("/v1/grammar/check")
-            .header("content-type", "application/json")
-            .body(axum::body::Body::from(body))
-            .unwrap();
-        let resp = app.clone().oneshot(req).await.unwrap();
-        assert!(resp.status().is_success());
-    }
-
-    #[tokio::test]
-    async fn deprecated_route_returns_error_on_unknown_tool() {
-        let reg = crate::tools::registry::build_registry();
-        let app = build_app_with_deprecated_api(reg);
-
-        let body = r#"{"jsonrpc":"2.0","id":99,"method":"tools.call","params":{"name":"does.not.exist","arguments":{}}}"#;
-        let req = Request::builder()
-            .method("POST")
-            .uri("/v1/grammar/check")
-            .header("content-type", "application/json")
-            .body(axum::body::Body::from(body))
-            .unwrap();
-        let resp = app.clone().oneshot(req).await.unwrap();
-        let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(json["error"]["code"], -32000);
-    }
+    // Deprecated REST tests removed.
 
     #[tokio::test]
     async fn healthz_json_shape_has_required_fields() {

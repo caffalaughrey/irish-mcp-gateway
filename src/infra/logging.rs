@@ -8,6 +8,11 @@ pub fn init() {
         .try_init();
 }
 
+/// Simple helper to log a metrics-like line until a real sink/exporter is added.
+pub fn log_metric(tool: &str, metric: &str, value: f64) {
+    tracing::info!(tool = tool, metric = metric, value = value, "metric");
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

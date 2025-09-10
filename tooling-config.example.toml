@@ -1,0 +1,14 @@
+# Gateway tooling configuration (example)
+# Set TOOLING_CONFIG=/path/to/this/file to enable. Environment variables override TOML.
+
+[grammar]
+base_url = "http://gramadoir:5000"        # or http://localhost:5050 when running locally
+request_timeout_ms = 6000                  # default if unset
+retries = 2                                # default if unset
+concurrency_limit = 8                      # reserved for future bounded concurrency
+
+[spell]
+base_url = "http://gaelspell:5000"        # or http://localhost:5051 when running locally
+request_timeout_ms = 6000
+retries = 2
+concurrency_limit = 8

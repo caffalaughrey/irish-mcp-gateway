@@ -1,19 +1,32 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 use crate::infra::http::headers::add_standard_headers;
-use crate::infra::runtime::limits::{make_http_client, retry_async};
+use crate::infra::runtime::limits::{make_http_client, make_http_client_with, retry_async};
+use crate::infra::config::ToolConfig;
 
 #[derive(Clone)]
 pub struct GaelspellRemote {
     base: String,
     http: Client,
+    retries: u32,
 }
 
 impl GaelspellRemote {
     pub fn new(base: impl Into<String>) -> Self {
         let http = make_http_client();
-        Self { base: base.into(), http }
+        Self { base: base.into(), http, retries: 2 }
+    }
+
+    pub fn from_config(cfg: &ToolConfig) -> Self {
+        let base = cfg
+            .base_url
+            .clone()
+            .unwrap_or_else(|| "".to_string());
+        let http = make_http_client_with(cfg);
+        let retries = cfg.retries.unwrap_or(2);
+        Self { base, http, retries }
     }
 
     #[allow(dead_code)]
@@ -32,7 +45,9 @@ impl GaelspellRemote {
         let url_clone = url.clone();
         let payload = TeacsReq { teacs: text };
 
-        let out: SpellWire = retry_async(2, move |_| {
+        let start = Instant::now();
+        let attempts = self.retries;
+        let res: Result<SpellWire, String> = retry_async(attempts, move |_| {
             let http = http.clone();
             let url = url_clone.clone();
             let payload = payload.clone();
@@ -48,8 +63,13 @@ impl GaelspellRemote {
                 resp.json::<SpellWire>().await.map_err(|e| e.to_string())
             }
         })
-        .await?;
-
+        .await;
+        if res.is_err() {
+            crate::infra::logging::log_metric("spell.check", "remote_error_total", 1.0);
+        }
+        let out = res?;
+        let elapsed_ms = start.elapsed().as_millis() as f64;
+        crate::infra::logging::log_metric("spell.check", "remote_latency_ms", elapsed_ms);
         Ok(out
             .into_iter()
             .map(|t| Correction::from(t))

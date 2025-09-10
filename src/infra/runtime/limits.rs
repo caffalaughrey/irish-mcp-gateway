@@ -1,4 +1,5 @@
 use std::time::Duration;
+use crate::infra::config::ToolConfig;
 
 /// Build a reqwest client with sane defaults (timeouts, redirects disabled by default).
 pub fn make_http_client() -> reqwest::Client {
@@ -7,6 +8,17 @@ pub fn make_http_client() -> reqwest::Client {
         .timeout(Duration::from_secs(6))
         .build()
         .expect("reqwest client")
+}
+
+/// Build a reqwest client using optional overrides from ToolConfig.
+pub fn make_http_client_with(cfg: &ToolConfig) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder().connect_timeout(Duration::from_secs(2));
+    if let Some(ms) = cfg.request_timeout_ms {
+        builder = builder.timeout(Duration::from_millis(ms));
+    } else {
+        builder = builder.timeout(Duration::from_secs(6));
+    }
+    builder.build().expect("reqwest client")
 }
 
 /// Simple exponential backoff utility for async ops.

@@ -204,7 +204,7 @@ mod tests {
         let reg = crate::tools::registry::build_registry();
         let app = build_app_with_deprecated_api(reg);
 
-        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
+        let body = r#"{"jsonrpc":"2.0","id":2,"method":"tools.call","params":{"name":"grammar.check","arguments":{"text":"Tá an peann ar an mbord"}}}"#;
         let req = Request::builder()
             .method("POST")
             .uri("/v1/grammar/check")

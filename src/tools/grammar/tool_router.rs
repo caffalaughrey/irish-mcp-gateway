@@ -15,7 +15,7 @@ impl<TChecker: Send + Sync + 'static> ServerHandler for GrammarSvc<TChecker> {}
 #[rmcp::tool_router]
 impl GrammarSvc<GramadoirRemote> {
     #[rmcp::tool(
-        name = "gael.grammar_check",
+        name = "grammar.check",
         description = "Run Gramadóir and return {\"issues\": [...]} exactly as JSON"
     )]
     async fn gael_grammar_check(

@@ -1,14 +1,17 @@
 use reqwest::Client;
+use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::GrammarIssue;
 use crate::infra::http::headers::{add_standard_headers, generate_request_id};
-use crate::infra::runtime::limits::{make_http_client, retry_async};
+use crate::infra::runtime::limits::{make_http_client, make_http_client_with, retry_async};
+use crate::infra::config::ToolConfig;
 
 #[derive(Clone)]
 pub struct GramadoirRemote {
     base: String,
     http: Client,
+    retries: u32,
 }
 
 impl GramadoirRemote {
@@ -17,7 +20,15 @@ impl GramadoirRemote {
         Self {
             base: base.into(),
             http,
+            retries: 2,
         }
+    }
+
+    pub fn from_config(cfg: &ToolConfig) -> Self {
+        let base = cfg.base_url.clone().unwrap_or_else(|| "".to_string());
+        let http = make_http_client_with(cfg);
+        let retries = cfg.retries.unwrap_or(2);
+        Self { base, http, retries }
     }
 
     #[allow(dead_code)]
@@ -38,7 +49,9 @@ impl GramadoirRemote {
         let url_clone = url.clone();
         tracing::debug!(endpoint = %url, "gramadoir.analyze request");
         let req_id = generate_request_id();
-        let issues: Vec<IssueWire> = retry_async(2, move |_| {
+        let start = Instant::now();
+        let attempts = self.retries;
+        let res: Result<Vec<IssueWire>, String> = retry_async(attempts, move |_| {
             let http = http.clone();
             let url = url_clone.clone();
             let req_id = req_id.clone();
@@ -61,8 +74,13 @@ impl GramadoirRemote {
                     .map_err(|e| e.to_string())
             }
         })
-        .await?;
-
+        .await;
+        if res.is_err() {
+            crate::infra::logging::log_metric("grammar.check", "remote_error_total", 1.0);
+        }
+        let issues = res?;
+        let elapsed_ms = start.elapsed().as_millis() as f64;
+        crate::infra::logging::log_metric("grammar.check", "remote_latency_ms", elapsed_ms);
         Ok(issues.into_iter().map(GrammarIssue::from).collect())
     }
 }

@@ -20,3 +20,12 @@ The script performs:
 2) POST `notifications/initialized` (expect 202)
 3) POST→SSE tools/list → print tool names
 4) POST→SSE tools/call `gael.grammar_check` → print structuredContent
+
+### Configuration
+- The gateway reads environment variables and an optional TOML file to configure tools.
+- Precedence: environment variables override TOML values if both are set.
+- To use TOML, set `TOOLING_CONFIG=/path/to/tooling-config.example.toml` and adjust values.
+- Common vars:
+  - `GRAMADOIR_BASE_URL`, `SPELLCHECK_BASE_URL`
+  - `GRAMMAR_TIMEOUT_MS`, `SPELL_TIMEOUT_MS`
+  - `GRAMMAR_RETRIES`, `SPELL_RETRIES`

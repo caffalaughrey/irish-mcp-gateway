@@ -2,6 +2,7 @@ use std::future::Future;
 use rmcp::handler::server::tool::{Parameters, ToolRouter};
 
 use crate::infra::runtime::mcp_transport::ServerHandler;
+use crate::infra::config::AppConfig;
 
 #[derive(Clone)]
 pub struct UnifiedSvc;
@@ -10,7 +11,7 @@ impl ServerHandler for UnifiedSvc {}
 
 #[rmcp::tool_router]
 impl UnifiedSvc {
-    #[rmcp::tool(name = "gael.grammar_check", description = "Irish grammar via Gramadóir")]
+    #[rmcp::tool(name = "grammar.check", description = "Irish grammar via Gramadóir")]
     async fn grammar(
         &self,
         params: Parameters<rmcp::model::JsonObject>,
@@ -21,8 +22,8 @@ impl UnifiedSvc {
             .and_then(|v| v.as_str())
             .ok_or_else(|| rmcp::ErrorData::invalid_params("missing required field: text", None))?
             .to_owned();
-        let base = std::env::var("GRAMADOIR_BASE_URL").unwrap_or_default();
-        let client = crate::clients::gramadoir::GramadoirRemote::new(base);
+        let app_cfg = AppConfig::from_env_and_toml();
+        let client = crate::clients::gramadoir::GramadoirRemote::from_config(&app_cfg.grammar);
         let issues = client
             .analyze(&text)
             .await
@@ -41,8 +42,8 @@ impl UnifiedSvc {
             .and_then(|v| v.as_str())
             .ok_or_else(|| rmcp::ErrorData::invalid_params("missing required field: text", None))?
             .to_owned();
-        let base = std::env::var("SPELLCHECK_BASE_URL").unwrap_or_default();
-        let client = crate::clients::gaelspell::GaelspellRemote::new(base);
+        let app_cfg = AppConfig::from_env_and_toml();
+        let client = crate::clients::gaelspell::GaelspellRemote::from_config(&app_cfg.spell);
         let corrections = client
             .check(&text)
             .await

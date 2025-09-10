@@ -96,7 +96,7 @@ async fn mcp_initialize_list_and_call_via_transport_and_tool_router() {
     // tools/call
     let call = json!({
         "jsonrpc":"2.0","id":3,"method":"tools/call",
-        "params": {"name":"gael.grammar_check","arguments":{"text":"Tá an peann ar an mbord"}}
+        "params": {"name":"grammar.check","arguments":{"text":"Tá an peann ar an mbord"}}
     });
     let call_req = Request::builder()
         .method("POST")

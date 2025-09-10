@@ -23,7 +23,7 @@ pub mod tool_router;
 
 impl ToolSpec for GrammarTool {
     fn name(&self) -> &'static str {
-        "gael.grammar_check"
+        "grammar.check"
     }
     fn description(&self) -> &'static str {
         "Irish grammar/spell check via Gramadóir"
@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn spec_fields_present() {
         let t = GrammarTool::new("http://x");
-        assert_eq!(t.name(), "gael.grammar_check");
+        assert_eq!(t.name(), "grammar.check");
         assert!(t.description().contains("grammar"));
         let s = t.input_schema();
         assert_eq!(s["type"], "object");
